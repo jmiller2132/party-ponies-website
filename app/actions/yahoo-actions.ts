@@ -183,7 +183,7 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
       }
     }
 
-    const weeklyScores = weeklyScoresResult.success ? weeklyScoresResult.data : []
+    const weeklyScores = (weeklyScoresResult.success ? weeklyScoresResult.data : undefined) ?? []
     
     // Determine regular season weeks
     const maxWeek = weeklyScores.length > 0 
