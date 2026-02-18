@@ -2,10 +2,8 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 /**
- * For /api/auth requests, force the host/proto to match NEXTAUTH_URL.
- * NextAuth uses x-forwarded-host and x-forwarded-proto to determine origin on Vercel.
- * If the platform sends a different host (e.g. *.vercel.app), the OAuth callback fails
- * because the redirect_uri we send to Yahoo (from NEXTAUTH_URL) won't match.
+ * Rewrite /api/auth/* to NEXTAUTH_URL so the request is handled as if it came
+ * from the canonical host. Fixes OAuth callback when Vercel passes a different host.
  */
 export function middleware(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith("/api/auth")) {
@@ -16,18 +14,17 @@ export function middleware(request: NextRequest) {
   if (!baseUrl) return NextResponse.next()
 
   try {
-    const url = new URL(baseUrl)
-    const requestHeaders = new Headers(request.headers)
-    // NextAuth uses x-forwarded-host ?? host for origin; set both so callback URL matches NEXTAUTH_URL
-    requestHeaders.set("x-forwarded-host", url.host)
-    requestHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""))
-    requestHeaders.set("host", url.host)
-    return NextResponse.next({
-      request: { headers: requestHeaders },
-    })
+    // Already rewrote (avoid loop); NextResponse.rewrite can run middleware again
+    if (request.headers.get("x-nextauth-canonical")) return NextResponse.next()
+    const path = request.nextUrl.pathname + request.nextUrl.search
+    const rewriteUrl = new URL(path, baseUrl)
+    const reqHeaders = new Headers(request.headers)
+    reqHeaders.set("x-nextauth-canonical", "1")
+    return NextResponse.rewrite(rewriteUrl, { request: { headers: reqHeaders } })
   } catch {
-    return NextResponse.next()
+    // ignore
   }
+  return NextResponse.next()
 }
 
 export const config = {
