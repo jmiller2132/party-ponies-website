@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  /* Light theme colors - Party Ponies Brand */
+  /* Primary: Vibrant Yellow/Gold (#FFC107 / hsl(45 100% 51%)) */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(0 0% 0%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(0 0% 0%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(0 0% 0%);
+  --color-primary: hsl(45 100% 51%); /* Vibrant yellow/gold */
+  --color-primary-foreground: hsl(0 0% 0%); /* Black text on yellow */
+  --color-secondary: hsl(0 0% 96%);
+  --color-secondary-foreground: hsl(0 0% 0%);
+  --color-muted: hsl(0 0% 96%);
+  --color-muted-foreground: hsl(0 0% 40%);
+  --color-accent: hsl(45 100% 51%); /* Yellow accent */
+  --color-accent-foreground: hsl(0 0% 0%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(0 0% 90%);
+  --color-input: hsl(0 0% 90%);
+  --color-ring: hsl(45 100% 51%); /* Yellow focus ring */
+  --radius: 0.5rem;
+  
+  /* Border radius values */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@theme dark {
+  /* Dark theme colors - Party Ponies Brand */
+  /* Primary: Vibrant Yellow/Gold on dark background */
+  --color-background: hsl(0 0% 8%); /* Very dark, almost black */
+  --color-foreground: hsl(0 0% 98%);
+  --color-card: hsl(0 0% 12%);
+  --color-card-foreground: hsl(0 0% 98%);
+  --color-popover: hsl(0 0% 12%);
+  --color-popover-foreground: hsl(0 0% 98%);
+  --color-primary: hsl(45 100% 51%); /* Same vibrant yellow/gold */
+  --color-primary-foreground: hsl(0 0% 0%); /* Black text on yellow */
+  --color-secondary: hsl(0 0% 18%);
+  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-muted: hsl(0 0% 18%);
+  --color-muted-foreground: hsl(0 0% 65%);
+  --color-accent: hsl(45 100% 51%); /* Yellow accent */
+  --color-accent-foreground: hsl(0 0% 0%);
+  --color-destructive: hsl(0 62.8% 50%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(0 0% 25%);
+  --color-input: hsl(0 0% 25%);
+  --color-ring: hsl(45 100% 51%); /* Yellow focus ring */
+}
+
+/* Force dark mode variables when .dark class is present */
+.dark {
+  --color-background: hsl(0 0% 8%);
+  --color-foreground: hsl(0 0% 98%);
+  --color-card: hsl(0 0% 12%);
+  --color-card-foreground: hsl(0 0% 98%);
+  --color-popover: hsl(0 0% 12%);
+  --color-popover-foreground: hsl(0 0% 98%);
+  --color-primary: hsl(45 100% 51%);
+  --color-primary-foreground: hsl(0 0% 0%);
+  --color-secondary: hsl(0 0% 18%);
+  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-muted: hsl(0 0% 18%);
+  --color-muted-foreground: hsl(0 0% 65%);
+  --color-accent: hsl(45 100% 51%);
+  --color-accent-foreground: hsl(0 0% 0%);
+  --color-destructive: hsl(0 62.8% 50%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(0 0% 25%);
+  --color-input: hsl(0 0% 25%);
+  --color-ring: hsl(45 100% 51%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  
+  :root {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+  
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Ensure dark mode applies when .dark class is present */
+  html.dark {
+    color-scheme: dark;
+  }
+  
+  html:not(.dark) {
+    color-scheme: light;
+  }
+}
+
+/* Premium Typography - Bold & Chunky Headlines */
+.font-display {
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 900; /* Extra bold for chunky headlines */
+  letter-spacing: -0.03em; /* Tighter for impact */
+  text-transform: uppercase; /* Match brand style */
+}
+
+.font-body {
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+}
