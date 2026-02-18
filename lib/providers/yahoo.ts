@@ -33,7 +33,7 @@ export default function Yahoo<P extends YahooProfile>(
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
-        scope: "openid fspt-r",
+        scope: "openid email profile fspt-r",
         response_type: "code",
         redirect_uri: redirectUri,
       },
@@ -45,12 +45,15 @@ export default function Yahoo<P extends YahooProfile>(
       id_token_signed_response_alg: "ES256",
     },
     profile(profile: unknown) {
-      const p = profile as YahooProfile
+      // ID token claims (from wellKnown/OIDC) may use different shapes; stay defensive so getProfile never throws
+      const p = profile as Record<string, unknown>
+      const sub = (p?.sub ?? p?.id) as string | undefined
+      const id = typeof sub === "string" && sub ? sub : `yahoo-${Date.now()}`
       return {
-        id: p.sub || `yahoo-${Date.now()}`,
-        name: p.name || "Yahoo User",
-        email: p.email || `${p.sub}@yahoo.com`,
-        image: p.picture,
+        id,
+        name: (p?.name as string) || "Yahoo User",
+        email: (p?.email as string) || (sub ? `${sub}@yahoo.com` : ""),
+        image: (p?.picture ?? p?.image) as string | undefined,
       } as unknown as P
     },
     ...options,
