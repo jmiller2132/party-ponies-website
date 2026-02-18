@@ -46,12 +46,25 @@ function withCanonicalHost(
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  return withCanonicalHost(req, res, (r, s) => {
+  return withCanonicalHost(req, res, async (r, s) => {
     const action = (r.query?.nextauth as string[])?.[0]
     const isCallback = action === "callback"
-    return NextAuth(r, s, authOptions).catch((err: unknown) => {
-      console.error("[NextAuth handler error]", isCallback ? "callback" : action, err)
-      s.redirect(302, "/api/auth/error?error=Callback")
-    })
+    try {
+      const result = await NextAuth(r, s, authOptions)
+      return result
+    } catch (err: unknown) {
+      const error = err as Error
+      console.error("[NextAuth handler error]", {
+        action: isCallback ? "callback" : action,
+        error: error.message,
+        stack: error.stack,
+        query: r.query,
+        providerId: (r.query?.nextauth as string[])?.[1],
+      })
+      // Only redirect if response hasn't been sent
+      if (!s.headersSent) {
+        s.redirect(302, `/api/auth/error?error=Callback&details=${encodeURIComponent(error.message)}`)
+      }
+    }
   })
 }

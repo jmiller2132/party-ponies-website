@@ -10,6 +10,7 @@ import Link from "next/link"
 function AuthErrorContent() {
   const searchParams = useSearchParams()
   const error = searchParams?.get("error") ?? null
+  const details = searchParams?.get("details") ?? null
 
   const errorMessages: Record<string, string> = {
     Configuration: "There is a problem with the server configuration.",
@@ -43,10 +44,15 @@ function AuthErrorContent() {
           </CardHeader>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-4 bg-muted rounded-lg">
+              <div className="p-4 bg-muted rounded-lg space-y-2">
                 <p className="text-sm font-mono text-muted-foreground">
                   Error code: {error}
                 </p>
+                {details && (
+                  <p className="text-xs font-mono text-muted-foreground break-all">
+                    Details: {details}
+                  </p>
+                )}
               </div>
             )}
             <div className="flex flex-col gap-2">
