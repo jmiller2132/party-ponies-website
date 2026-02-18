@@ -2,7 +2,7 @@ import NextAuth from "next-auth"
 import type { NextApiRequest, NextApiResponse } from "next"
 import { authOptions } from "@/lib/auth"
 
-// Set canonical host on req so NextAuth detectOrigin() matches NEXTAUTH_URL (no middleware reliance).
+// Force NextAuth to see canonical host via Proxy (handles frozen/getter headers on Vercel).
 function withCanonicalHost(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -12,10 +12,16 @@ function withCanonicalHost(
   if (baseUrl) {
     try {
       const url = new URL(baseUrl)
-      const h = req.headers as Record<string, string | string[] | undefined>
-      h["x-forwarded-host"] = url.host
-      h["host"] = url.host
-      h["x-forwarded-proto"] = url.protocol.replace(":", "")
+      const canonicalHost = url.host
+      const canonicalProto = url.protocol.replace(":", "")
+      const orig = req.headers as Record<string, string | string[] | undefined>
+      ;(req as NextApiRequest & { headers: Record<string, string | string[] | undefined> }).headers = new Proxy(orig, {
+        get(target, prop: string) {
+          if (prop === "x-forwarded-host" || prop === "host") return canonicalHost
+          if (prop === "x-forwarded-proto") return canonicalProto
+          return target[prop]
+        },
+      })
     } catch {
       // ignore
     }
