@@ -46,5 +46,12 @@ function withCanonicalHost(
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  return withCanonicalHost(req, res, (r, s) => NextAuth(r, s, authOptions))
+  return withCanonicalHost(req, res, (r, s) => {
+    const action = (r.query?.nextauth as string[])?.[0]
+    const isCallback = action === "callback"
+    return NextAuth(r, s, authOptions).catch((err: unknown) => {
+      console.error("[NextAuth handler error]", isCallback ? "callback" : action, err)
+      s.redirect(302, "/api/auth/error?error=Callback")
+    })
+  })
 }

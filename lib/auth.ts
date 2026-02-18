@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
-  debug: false, // Set to true only when debugging auth; never leave on — it logs secrets
+  debug: process.env.AUTH_DEBUG === "true", // Logs details; set AUTH_DEBUG=true in Vercel to trace callback errors
   providers: [
     YahooProvider({
       clientId: process.env.YAHOO_CLIENT_ID!,
