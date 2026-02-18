@@ -15,7 +15,7 @@ function AuthErrorContent() {
     Configuration: "There is a problem with the server configuration.",
     AccessDenied: "You do not have permission to sign in.",
     Verification: "The verification token has expired or has already been used.",
-    OAuthCallback: "Yahoo returned successfully but the callback failed. Check that NEXTAUTH_URL in .env.local is exactly https://localhost:3000 (no trailing slash) and matches the URL in your Yahoo app.",
+    OAuthCallback: "Yahoo returned successfully but the callback failed. NEXTAUTH_URL must match the URL you're visiting (no trailing slash). Local: NEXTAUTH_URL=https://localhost:3000 and in Yahoo add https://localhost:3000/api/auth/callback/yahoo. Production: NEXTAUTH_URL=https://www.partyponiesff.com and in Yahoo add https://www.partyponiesff.com/api/auth/callback/yahoo.",
     OAuthCallbackError: "There was an error during the OAuth callback. Check server logs (terminal where npm run dev is running) for details.",
     OAuthSignin: "Error occurred during OAuth sign in.",
     OAuthCreateAccount: "Could not create OAuth account.",

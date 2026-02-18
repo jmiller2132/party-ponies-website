@@ -41,7 +41,7 @@ npm install
 1. Go to https://developer.yahoo.com/apps
 2. Create a new application
 3. Select "Fantasy Sports" as the API
-4. Set the callback URL to: `http://localhost:3000/api/auth/callback/yahoo` (for local) or your production URL
+4. Set the callback URL to: `http://localhost:3000/api/auth/callback/yahoo` (local) or `https://www.partyponiesff.com/api/auth/callback/yahoo` (production)
 5. Note down your Client ID and Client Secret
 
 ### Step 3: Set Up Supabase
@@ -107,8 +107,8 @@ Supabase pauses free-tier projects after about **7 days of inactivity**. To keep
 
 1. **Deploy your app** (e.g. to Vercel) so the keepalive endpoint is reachable.
 2. **Ping the keepalive URL** every 5–6 days. Use one of these free options:
-   - **[cron-job.org](https://cron-job.org)** – Create a free account → Create Cronjob → URL: `https://your-app.vercel.app/api/keepalive` → Schedule: every 5 days.
-   - **[UptimeRobot](https://uptimerobot.com)** – Add monitor → HTTP(s) → URL: `https://your-app.vercel.app/api/keepalive` → Check interval: 5 days (or daily for uptime checks).
+   - **[cron-job.org](https://cron-job.org)** – Create a free account → Create Cronjob → URL: `https://www.partyponiesff.com/api/keepalive` → Schedule: every 5 days.
+   - **[UptimeRobot](https://uptimerobot.com)** – Add monitor → HTTP(s) → URL: `https://www.partyponiesff.com/api/keepalive` → Check interval: 5 days (or daily for uptime checks).
 3. The `/api/keepalive` route runs a tiny Supabase query so the project counts as active.
 
 Alternatively, upgrade to [Supabase Pro](https://supabase.com/pricing) (no auto-pause).
@@ -169,7 +169,7 @@ League standings and matchups are stored in Supabase for permanent access. Yahoo
 4. Deploy!
 
 **Important:** Update your Yahoo app's callback URL to:
-`https://your-domain.vercel.app/api/auth/callback/yahoo`
+`https://www.partyponiesff.com/api/auth/callback/yahoo`
 
 ## Customization
 
