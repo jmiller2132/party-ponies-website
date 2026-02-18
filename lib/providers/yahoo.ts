@@ -29,6 +29,7 @@ export default function Yahoo<P extends YahooProfile>(
     id: "yahoo",
     name: "Yahoo",
     type: "oauth" as const,
+    issuer: "https://api.login.yahoo.com",
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
