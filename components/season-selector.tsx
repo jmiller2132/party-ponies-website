@@ -16,7 +16,7 @@ export function SeasonSelector({ availableYears, defaultYears }: SeasonSelectorP
   const [selectedYears, setSelectedYears] = useState<number[]>(defaultYears)
 
   useEffect(() => {
-    const yearsParam = searchParams.get("years")
+    const yearsParam = searchParams?.get("years")
     if (yearsParam) {
       const years = yearsParam.split(",").map(y => parseInt(y.trim())).filter(y => !isNaN(y))
       if (years.length > 0) {
