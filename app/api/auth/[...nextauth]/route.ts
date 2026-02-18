@@ -7,15 +7,16 @@ async function withFixedOrigin(
   req: Request,
   context: { params: Promise<{ nextauth?: string[] }> }
 ) {
-  const origVercel = process.env.VERCEL
-  const origTrustHost = process.env.AUTH_TRUST_HOST
+  const env = process.env as Record<string, string | undefined>
+  const origVercel = env.VERCEL
+  const origTrustHost = env.AUTH_TRUST_HOST
   try {
-    process.env.VERCEL = ""
-    process.env.AUTH_TRUST_HOST = ""
+    env.VERCEL = ""
+    env.AUTH_TRUST_HOST = ""
     return await handler(req, context)
   } finally {
-    if (origVercel !== undefined) process.env.VERCEL = origVercel
-    if (origTrustHost !== undefined) process.env.AUTH_TRUST_HOST = origTrustHost
+    if (origVercel !== undefined) env.VERCEL = origVercel
+    if (origTrustHost !== undefined) env.AUTH_TRUST_HOST = origTrustHost
   }
 }
 
