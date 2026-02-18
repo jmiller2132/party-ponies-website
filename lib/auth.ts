@@ -1,17 +1,15 @@
 import NextAuth, { NextAuthOptions } from "next-auth"
-import { SupabaseAdapter } from "@auth/supabase-adapter"
 import YahooProvider from "@/lib/providers/yahoo"
 import { createServerSupabaseClient } from "@/lib/supabase"
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   debug: false, // Set to true only when debugging auth; never leave on — it logs secrets
-  trustHost: true, // Use NEXTAUTH_URL for callbacks (needed for https localhost / token exchange)
   providers: [
     YahooProvider({
       clientId: process.env.YAHOO_CLIENT_ID!,
       clientSecret: process.env.YAHOO_CLIENT_SECRET!,
-    }),
+    }) as unknown as NextAuthOptions["providers"][number],
   ],
   // Temporarily disable adapter to test - we'll store tokens manually in JWT callback
   // adapter: SupabaseAdapter({

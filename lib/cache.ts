@@ -228,21 +228,24 @@ export async function cacheSDSPlus(leagueKey: string, season: string, scores: SD
       .eq('league_key', leagueKey)
       .eq('season', season)
     
-    // Insert new scores
-    const rows = scores.map(score => ({
-      league_key: leagueKey,
-      season: season,
-      owner_name: score.owner,
-      team_key: score.team_key,
-      sds_plus_score: score.score,
-      sds_plus_rank: score.rank,
-      final_rank: score.finalRank,
-      wins: score.wins || 0,
-      losses: score.losses || 0,
-      ties: score.ties || 0,
-      points_for: score.points_for || 0,
-      points_against: score.points_against || 0,
-    }))
+    // Insert new scores (callers may pass scores with optional wins/losses/etc. from merged standings)
+    const rows = scores.map(score => {
+      const s = score as SDSPlusScore & { wins?: number; losses?: number; ties?: number; points_for?: number; points_against?: number }
+      return {
+        league_key: leagueKey,
+        season: season,
+        owner_name: score.owner,
+        team_key: score.team_key,
+        sds_plus_score: score.score,
+        sds_plus_rank: score.rank,
+        final_rank: score.finalRank,
+        wins: s.wins ?? 0,
+        losses: s.losses ?? 0,
+        ties: s.ties ?? 0,
+        points_for: s.points_for ?? 0,
+        points_against: s.points_against ?? 0,
+      }
+    })
     
     await supabase
       .from('sds_plus_cache')
@@ -461,7 +464,7 @@ export async function getCachedManagers(): Promise<string[] | null> {
     // Get unique managers from manager_stats_cache (if it exists and is fresh)
     const { data, error } = await supabase
       .from('manager_stats_cache')
-      .select('owner_name')
+      .select('owner_name, cached_at')
       .order('owner_name', { ascending: true })
     
     if (error || !data || data.length === 0) {
@@ -469,7 +472,7 @@ export async function getCachedManagers(): Promise<string[] | null> {
     }
     
     // Check if cache is fresh (use oldest cached_at)
-    const oldestCache = data.reduce((oldest, row) => {
+    const oldestCache = data.reduce((oldest: Date | null, row: { owner_name: string; cached_at?: string | null }) => {
       if (!row.cached_at) return oldest
       const rowDate = new Date(row.cached_at)
       // Check if date is valid

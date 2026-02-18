@@ -28,7 +28,7 @@ export default function Yahoo<P extends YahooProfile>(
   return {
     id: "yahoo",
     name: "Yahoo",
-    type: "oauth",
+    type: "oauth" as const,
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
@@ -43,13 +43,14 @@ export default function Yahoo<P extends YahooProfile>(
     client: {
       id_token_signed_response_alg: "ES256",
     },
-    profile(profile) {
+    profile(profile: unknown) {
+      const p = profile as YahooProfile
       return {
-        id: profile.sub || profile.id || `yahoo-${Date.now()}`,
-        name: profile.name || profile.nickname || "Yahoo User",
-        email: profile.email || `${profile.sub || profile.id}@yahoo.com`,
-        image: profile.picture || profile.avatar_url,
-      } as P
+        id: p.sub || `yahoo-${Date.now()}`,
+        name: p.name || "Yahoo User",
+        email: p.email || `${p.sub}@yahoo.com`,
+        image: p.picture,
+      } as unknown as P
     },
     ...options,
   }

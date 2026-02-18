@@ -173,7 +173,7 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
   // Skip SDS+ calculation entirely for list view - it's too expensive
   // SDS+ will be calculated on-demand for individual manager pages only
   // Create a map of league_key -> { standings }
-  const leagueDataMap = new Map<string, { year: number; standings: any[] }>()
+  const leagueDataMap = new Map<string, { year: number; standings: any[]; sdsScores?: unknown[] }>()
   standingsResults.forEach(({ league, year, standings }) => {
     if (standings) {
       leagueDataMap.set(league.league_key, {
@@ -208,9 +208,10 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
       // Find SDS+ score for this manager in this season
       let sdsPlus: number | undefined
       let sdsRank: number | undefined
-      if (sdsScores) {
-        const managerSDS = sdsScores.find((s: any) => s.owner === ownerName)
-        if (managerSDS) {
+      if (sdsScores && Array.isArray(sdsScores)) {
+        const list = sdsScores as { owner?: string; score?: number; rank?: number }[]
+        const managerSDS = list.find(s => s.owner === ownerName)
+        if (managerSDS && typeof managerSDS.score === 'number' && typeof managerSDS.rank === 'number') {
           sdsPlus = managerSDS.score
           sdsRank = managerSDS.rank
         }
@@ -359,7 +360,7 @@ export async function getManagerStatsLightweight(ownerName: string): Promise<Man
   })
   
   const results = await Promise.all(seasonPromises)
-  const validSeasons = results.filter((s): s is ManagerSeasonStats => s !== null)
+  const validSeasons = results.filter((s) => s !== null) as ManagerSeasonStats[]
   seasons.push(...validSeasons)
   
   if (seasons.length === 0) {
@@ -379,7 +380,7 @@ export async function getManagerStatsLightweight(ownerName: string): Promise<Man
   const avg_finish = finishes.reduce((a, b) => a + b, 0) / finishes.length
   
   // Calculate SDS+ stats
-  const sdsScores = seasons.filter(s => s.sds_plus !== undefined).map(s => s.sds_plus!)
+  const sdsScores = seasons.filter((s): s is ManagerSeasonStats & { sds_plus: number } => s.sds_plus !== undefined).map(s => s.sds_plus)
   const avg_sds_plus = sdsScores.length > 0
     ? Math.round((sdsScores.reduce((a, b) => a + b, 0) / sdsScores.length) * 10) / 10
     : undefined
@@ -480,7 +481,7 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
   })
   
   const seasonResults = await Promise.all(sdsPromises)
-  const validSeasons = seasonResults.filter((s): s is ManagerSeasonStats => s !== null)
+  const validSeasons = seasonResults.filter((s) => s !== null) as ManagerSeasonStats[]
   seasons.push(...validSeasons)
   
   if (seasons.length === 0) {

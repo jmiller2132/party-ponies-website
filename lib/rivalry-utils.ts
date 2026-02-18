@@ -160,7 +160,7 @@ export async function getTopRivalriesForManager(ownerName: string, limit: number
   })
 
   const results = await Promise.all(recordPromises)
-  const validRivalries = results.filter((r): r is TopRivalry => r !== null)
+  const validRivalries = results.filter((r): r is NonNullable<typeof results[0]> => r !== null) as TopRivalry[]
 
   // Sort by competitiveness score (highest first), then by total games
   validRivalries.sort((a, b) => {

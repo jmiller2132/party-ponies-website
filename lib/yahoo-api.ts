@@ -306,13 +306,13 @@ export async function fetchCurrentWeekMatchups(leagueKey: string, userId?: strin
           team1: {
             key: team1?.team_key,
             name: team1?.name,
-            owner_name: getStandardizedOwnerName(managerMap.get(team1?.team_key), team1?.name, yearNum),
+            owner_name: getStandardizedOwnerName(managerMap.get(team1?.team_key), team1?.name, year),
             points: parseFloat(team1?.team_points?.total || '0'),
           },
           team2: {
             key: team2?.team_key,
             name: team2?.name,
-            owner_name: getStandardizedOwnerName(managerMap.get(team2?.team_key), team2?.name, yearNum),
+            owner_name: getStandardizedOwnerName(managerMap.get(team2?.team_key), team2?.name, year),
             points: parseFloat(team2?.team_points?.total || '0'),
           },
           status: matchup.status,
