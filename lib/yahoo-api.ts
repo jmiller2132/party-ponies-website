@@ -17,7 +17,7 @@ interface YahooLeague {
   is_public?: boolean
 }
 
-interface YahooStanding {
+export interface YahooStanding {
   team_key: string
   name: string
   owner_name?: string // Manager/owner name
