@@ -18,8 +18,10 @@ export function middleware(request: NextRequest) {
   try {
     const url = new URL(baseUrl)
     const requestHeaders = new Headers(request.headers)
+    // NextAuth uses x-forwarded-host ?? host for origin; set both so callback URL matches NEXTAUTH_URL
     requestHeaders.set("x-forwarded-host", url.host)
     requestHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""))
+    requestHeaders.set("host", url.host)
     return NextResponse.next({
       request: { headers: requestHeaders },
     })
