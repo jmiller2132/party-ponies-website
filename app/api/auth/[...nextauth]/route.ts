@@ -4,14 +4,14 @@ import handler from "@/lib/auth"
 // NextAuth's detectOrigin() uses request host when process.env.VERCEL is set,
 // which can differ from NEXTAUTH_URL and break the OAuth callback. Unsetting
 // VERCEL for the duration of the auth request makes detectOrigin use NEXTAUTH_URL.
-function withFixedOrigin(
+async function withFixedOrigin(
   req: Request,
   context: { params: Promise<{ nextauth?: string[] }> }
 ) {
   const orig = process.env.VERCEL
   try {
     delete process.env.VERCEL
-    return handler(req, context)
+    return await handler(req, context)
   } finally {
     if (orig !== undefined) process.env.VERCEL = orig
   }
