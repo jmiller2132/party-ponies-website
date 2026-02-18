@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Trophy, Users, BarChart3, Target, Home as HomeIcon, Sparkles, ClipboardList } from "lucide-react"
-import Image from "next/image"
 import { ThemeToggle } from "./theme-toggle"
 
 const navItems = [
@@ -27,16 +26,18 @@ export function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-3 font-display text-xl font-black hover:opacity-80 transition-opacity">
-            <Image 
-              src="/logos/logo-main.svg" 
-              alt="Party Ponies Logo" 
-              width={40} 
+            {/* 8.svg: viewBox 71.85×96.67 — size to match aspect ratio */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logos/logo-nav.svg"
+              alt="Party Ponies"
+              width={30}
               height={40}
-              className="dark:invert"
-              priority
+              className="h-10 w-[30px] shrink-0 dark:invert"
+              fetchPriority="high"
             />
-            <span className="hidden sm:inline uppercase">PARTY PONIES</span>
-            <span className="text-xs font-normal text-muted-foreground hidden md:inline">Est. 2013</span>
+            <span className="uppercase">PARTY PONIES</span>
+            <span className="text-xs font-normal text-muted-foreground hidden sm:inline">Est. 2013</span>
           </Link>
           <div className="flex items-center gap-2">
             {navItems.map((item) => {
