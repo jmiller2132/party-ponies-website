@@ -29,7 +29,7 @@ export default function Yahoo<P extends YahooProfile>(
     id: "yahoo",
     name: "Yahoo",
     type: "oauth" as const,
-    issuer: "https://api.login.yahoo.com",
+    wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
