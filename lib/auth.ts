@@ -55,6 +55,25 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
+  events: {
+    async signIn({ user, account, isNewUser }) {
+      console.log("[NextAuth signIn event]", { userId: user?.id, provider: account?.provider, isNewUser })
+    },
+    async signOut() {
+      console.log("[NextAuth signOut event]")
+    },
+  },
+  logger: {
+    error(code, ...message) {
+      console.error("[NextAuth ERROR]", code, ...message)
+    },
+    warn(code) {
+      console.warn("[NextAuth WARN]", code)
+    },
+    debug(code, ...message) {
+      console.log("[NextAuth DEBUG]", code, ...message)
+    },
+  },
   pages: {
     signIn: "/auth/signin",
     error: "/api/auth/error",
