@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server"
  * For /api/auth only: set forwarded headers from NEXTAUTH_URL so NextAuth
  * sees the canonical origin. Skip rewrite (caused "something went wrong").
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith("/api/auth")) {
     return NextResponse.next()
   }
