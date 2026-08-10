@@ -36,7 +36,7 @@ export default function Yahoo<P extends YahooProfile>(
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
-        scope: "openid email fspt-r",
+        scope: "openid email",
         response_type: "code",
         redirect_uri: redirectUri,
       },
