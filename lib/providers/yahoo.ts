@@ -29,12 +29,14 @@ export default function Yahoo<P extends YahooProfile>(
     id: "yahoo",
     name: "Yahoo",
     type: "oauth" as const,
-    // Plain OAuth 2.0 — no wellKnown/OIDC to avoid ID token validation issues.
-    // Yahoo returns user identity from the userinfo endpoint after token exchange.
+    // Use wellKnown for OIDC discovery (jwks_uri, issuer, etc.).
+    // Do NOT pin id_token_signed_response_alg — Yahoo may use ES256 or RS256
+    // depending on the app; letting openid-client auto-detect from the token header.
+    wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
-        scope: "openid email",
+        scope: "openid email fspt-r",
         response_type: "code",
         redirect_uri: redirectUri,
       },
