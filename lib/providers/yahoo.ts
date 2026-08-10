@@ -29,7 +29,8 @@ export default function Yahoo<P extends YahooProfile>(
     id: "yahoo",
     name: "Yahoo",
     type: "oauth" as const,
-    wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
+    // Plain OAuth 2.0 — no wellKnown/OIDC to avoid ID token validation issues.
+    // Yahoo returns user identity from the userinfo endpoint after token exchange.
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
@@ -41,11 +42,7 @@ export default function Yahoo<P extends YahooProfile>(
     token: "https://api.login.yahoo.com/oauth2/get_token",
     userinfo: "https://api.login.yahoo.com/openid/v1/userinfo",
     checks: ["state"],
-    client: {
-      id_token_signed_response_alg: "ES256",
-    },
     profile(profile: unknown) {
-      // ID token claims (from wellKnown/OIDC) may use different shapes; stay defensive so getProfile never throws
       const p = profile as Record<string, unknown>
       const sub = (p?.sub ?? p?.id) as string | undefined
       const id = typeof sub === "string" && sub ? sub : `yahoo-${Date.now()}`
