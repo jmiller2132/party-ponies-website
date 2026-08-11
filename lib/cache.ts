@@ -184,7 +184,7 @@ export async function getCachedSDSPlus(leagueKey: string, season: string): Promi
       return null // Cache expired
     }
     
-    // Transform database rows to SDSPlusScore format
+    // Transform database rows to PPSIScore format
     return data.map(row => ({
       owner: row.owner_name,
       team_key: row.team_key,
@@ -192,15 +192,13 @@ export async function getCachedSDSPlus(leagueKey: string, season: string): Promi
       rank: row.sds_plus_rank,
       finalRank: row.final_rank,
       breakdown: {
-        pfIndexEra: 0,
-        allPlayWinPct: 0,
-        regularSeasonScore: 0,
-        weeklyCeilingRate: 0,
-        strengthOfSchedule: 0,
-        consistencyIndex: 0,
-        postseasonBonus: 0,
-        playoffLuckDiff: 0,
+        dominance: 0,
+        scoring: 0,
+        scheduleLuck: 0,
+        seasonResult: 0,
       },
+      dominanceRate: 0,
+      scoringIndex: 0,
       interpretation: '',
       wins: row.wins ?? 0,
       losses: row.losses ?? 0,
