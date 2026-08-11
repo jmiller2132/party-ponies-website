@@ -35,7 +35,7 @@ async function ComparisonTable({ selectedYears }: { selectedYears: number[] }) {
     })
   )
 
-  const allScores = results.filter((r): r is { year: number; scores: ReturnType<typeof results[0] extends null ? never : NonNullable<typeof results[0]>["scores"]["map"]>[number][] } => r !== null)
+  const allScores = results.flatMap(r => r ? [r] : [])
 
   if (allScores.length === 0) {
     return (
