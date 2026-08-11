@@ -41,10 +41,7 @@ export default function Yahoo<P extends YahooProfile>(
         redirect_uri: redirectUri,
       },
     },
-    token: {
-      url: "https://api.login.yahoo.com/oauth2/get_token",
-      params: { redirect_uri: redirectUri },
-    },
+    token: "https://api.login.yahoo.com/oauth2/get_token",
     userinfo: "https://api.login.yahoo.com/openid/v1/userinfo",
     checks: ["state"],
     profile(profile: unknown) {
