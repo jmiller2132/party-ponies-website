@@ -24,13 +24,12 @@ export function ComparisonTableWithFilters({
         uniqueOwners={uniqueOwners}
         onFilterChange={setFilters}
       />
-      <SDSPlusTable 
-        scores={scores} 
-        defaultSort="finalRank" 
-        defaultDirection="asc" 
+      <SDSPlusTable
+        scores={scores}
+        defaultSort="score"
+        defaultDirection="desc"
         showYear={true}
         filters={filters}
-        hasWeeklyScores={false}
       />
     </>
   )

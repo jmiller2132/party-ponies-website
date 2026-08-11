@@ -1,27 +1,37 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+
+export const metadata: Metadata = {
+  title: "Party Ponies Fantasy League | History & Records",
+  description: "13+ seasons of Party Ponies fantasy football history — standings, all-time records, PPSI rankings, and rivalry tracking. Est. 2013.",
+  openGraph: {
+    title: "Party Ponies Fantasy League",
+    description: "13+ seasons of fantasy football history. Standings, records, PPSI rankings, and rivalries.",
+  },
+}
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Trophy, Users, Target, ArrowRight, BarChart3, ClipboardList } from "lucide-react"
+import { Trophy, Users, Target, ArrowRight, BarChart3, Award, Sparkles, Calendar } from "lucide-react"
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-secondary/20">
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="container mx-auto px-4 py-24">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground border-2 border-primary">
             <Trophy className="h-4 w-4" />
             <span className="text-sm font-bold">Fantasy Football Excellence</span>
           </div>
-          
+
           <h1 className="font-display text-5xl md:text-7xl font-black tracking-tight text-foreground">
             PARTY PONIES
             <span className="block text-primary mt-2">LEAGUE HISTORY</span>
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Est. 2013</p>
-          
+
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto font-body leading-relaxed">
-            Your complete guide to league standings, historical records, and the rivalries that define our league.
+            Your complete guide to 13+ years of league history — standings, records, rivalries, and the metric that settles every argument.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
@@ -57,8 +67,45 @@ export default function Home() {
             <CardContent>
               <Link href="/standings">
                 <Button variant="ghost" className="gap-2">
-                  View Standings
-                  <ArrowRight className="h-4 w-4" />
+                  View Standings <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 hover:border-primary/50 transition-colors">
+            <CardHeader>
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                <Calendar className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle>Season History</CardTitle>
+              <CardDescription>
+                Full standings, brackets, and stats for every season since 2013
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/seasons">
+                <Button variant="ghost" className="gap-2">
+                  Browse Seasons <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 hover:border-primary/50 transition-colors">
+            <CardHeader>
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle>PPSI Season Index</CardTitle>
+              <CardDescription>
+                Compare any season across all years with the Party Ponies Season Index — who actually had the best season ever?
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/seasons/compare">
+                <Button variant="ghost" className="gap-2">
+                  Compare Seasons <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </CardContent>
@@ -71,14 +118,13 @@ export default function Home() {
               </div>
               <CardTitle>Manager Profiles</CardTitle>
               <CardDescription>
-                Deep dive into each manager's history, achievements, and statistics
+                Deep dive into each manager's history, achievements, and career statistics
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/managers">
                 <Button variant="ghost" className="gap-2">
-                  Explore Profiles
-                  <ArrowRight className="h-4 w-4" />
+                  Explore Profiles <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </CardContent>
@@ -87,18 +133,17 @@ export default function Home() {
           <Card className="border-border/50 hover:border-primary/50 transition-colors">
             <CardHeader>
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <Trophy className="h-6 w-6 text-primary" />
+                <Award className="h-6 w-6 text-primary" />
               </div>
               <CardTitle>All-Time Records</CardTitle>
               <CardDescription>
-                Historical records and achievements preserved forever in our database
+                Championship roll, most wins, highest scoring seasons, and the hall of shame
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/records">
                 <Button variant="ghost" className="gap-2">
-                  View Records
-                  <ArrowRight className="h-4 w-4" />
+                  View Records <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </CardContent>
@@ -117,48 +162,7 @@ export default function Home() {
             <CardContent>
               <Link href="/rivalry">
                 <Button variant="ghost" className="gap-2">
-                  Explore Rivalries
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 hover:border-primary/50 transition-colors">
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <Trophy className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle>Historical Data</CardTitle>
-              <CardDescription>
-                Complete archive of past seasons that Yahoo no longer provides access to
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href="/records">
-                <Button variant="ghost" className="gap-2">
-                  Browse History
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 hover:border-primary/50 transition-colors opacity-75">
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <ClipboardList className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle>Draft Score</CardTitle>
-              <CardDescription>
-                Analyze draft performance by comparing draft position to season finish
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href="/draft">
-                <Button variant="ghost" className="gap-2">
-                  Coming Soon
-                  <ArrowRight className="h-4 w-4" />
+                  Explore Rivalries <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </CardContent>
@@ -166,15 +170,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Stats Section */}
+      {/* Footer tagline */}
       <section className="container mx-auto px-4 py-16 border-t border-border">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+        <div className="max-w-4xl mx-auto text-center space-y-4">
           <h2 className="font-display text-3xl md:text-4xl font-bold">
             Your League, Your Legacy
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Built with premium technology to preserve and celebrate your fantasy football journey.
-            Synced with Yahoo Fantasy Sports API and powered by Supabase for permanent historical records.
+            13+ seasons preserved and compared. Synced with Yahoo Fantasy Sports and built to settle debates for good.
           </p>
         </div>
       </section>

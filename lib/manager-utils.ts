@@ -170,8 +170,8 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
   
   const standingsResults = await Promise.all(standingsPromises)
   
-  // Skip SDS+ calculation entirely for list view - it's too expensive
-  // SDS+ will be calculated on-demand for individual manager pages only
+  // Skip PPSI calculation entirely for list view - it's too expensive
+  // PPSI will be calculated on-demand for individual manager pages only
   // Create a map of league_key -> { standings }
   const leagueDataMap = new Map<string, { year: number; standings: any[]; sdsScores?: unknown[] }>()
   standingsResults.forEach(({ league, year, standings }) => {
@@ -205,7 +205,7 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
         managerStatsMap.set(ownerName, [])
       }
       
-      // Find SDS+ score for this manager in this season
+      // Find PPSI score for this manager in this season
       let sdsPlus: number | undefined
       let sdsRank: number | undefined
       if (sdsScores && Array.isArray(sdsScores)) {
@@ -251,7 +251,7 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
     const worst_finish = Math.max(...finishes)
     const avg_finish = finishes.reduce((a, b) => a + b, 0) / finishes.length
     
-    // Calculate SDS+ stats from seasons
+    // Calculate PPSI stats from seasons
     const sdsScores = seasons.filter(s => s.sds_plus !== undefined).map(s => s.sds_plus!)
     const avg_sds_plus = sdsScores.length > 0
       ? Math.round((sdsScores.reduce((a, b) => a + b, 0) / sdsScores.length) * 10) / 10
@@ -294,128 +294,7 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
 }
 
 /**
- * Get lightweight manager stats (with SDS+ but skipping weekly scores) - for list views
- */
-export async function getManagerStatsLightweight(ownerName: string): Promise<ManagerStats | null> {
-  const leagues = await getAllLeaguesWithMetadata()
-  const seasons: ManagerSeasonStats[] = []
-  
-  // Get the most recent season year from available leagues (not calendar year)
-  const availableYears = leagues
-    .map(l => parseInt(l.season) || 0)
-    .filter(year => year > 0)
-  const mostRecentSeasonYear = availableYears.length > 0 ? Math.max(...availableYears) : new Date().getFullYear()
-  
-  // Fetch standings for all leagues in parallel first
-  const standingsPromises = leagues.map(async (league) => {
-    const year = parseInt(league.season) || 0
-    if (year === 0) return { league, year, standings: null }
-    
-    try {
-      const standings = await fetchLeagueStandings(league.league_key)
-      return { league, year, standings }
-    } catch (error) {
-      return { league, year, standings: null }
-    }
-  })
-  
-  const standingsResults = await Promise.all(standingsPromises)
-  
-  // Fetch SDS+ scores only for seasons where manager exists (skip weekly scores for performance)
-  const seasonPromises = standingsResults.map(async ({ league, year, standings }) => {
-    if (!standings) return null
-    
-    const managerTeam = standings.find(team => team.owner_name === ownerName)
-    if (!managerTeam) return null
-    
-    // Fetch SDS+ scores (skip weekly scores for performance)
-    let sdsPlus: number | undefined
-    let sdsRank: number | undefined
-    
-    try {
-      const sdsResult = await getSDSPlusScores(league.league_key, true) // Skip weekly scores
-      if (sdsResult.success && sdsResult.data) {
-        const managerSDS = sdsResult.data.find(s => s.owner === ownerName)
-        if (managerSDS) {
-          sdsPlus = managerSDS.score
-          sdsRank = managerSDS.rank
-        }
-      }
-    } catch (error) {
-      // SDS+ calculation failed, continue without it
-    }
-    
-    return {
-      year,
-      league_key: league.league_key,
-      rank: managerTeam.rank,
-      wins: managerTeam.wins || 0,
-      losses: managerTeam.losses || 0,
-      ties: managerTeam.ties || 0,
-      points_for: managerTeam.points_for || 0,
-      points_against: managerTeam.points_against || 0,
-      sds_plus: sdsPlus,
-      sds_rank: sdsRank,
-    }
-  })
-  
-  const results = await Promise.all(seasonPromises)
-  const validSeasons = results.filter((s) => s !== null) as ManagerSeasonStats[]
-  seasons.push(...validSeasons)
-  
-  if (seasons.length === 0) {
-    return null
-  }
-  
-  // Calculate all-time stats
-  const championships = seasons.filter(s => s.rank === 1).length
-  const total_wins = seasons.reduce((sum, s) => sum + s.wins, 0)
-  const total_losses = seasons.reduce((sum, s) => sum + s.losses, 0)
-  const total_ties = seasons.reduce((sum, s) => sum + s.ties, 0)
-  const total_points_for = seasons.reduce((sum, s) => sum + s.points_for, 0)
-  const total_points_against = seasons.reduce((sum, s) => sum + s.points_against, 0)
-  const finishes = seasons.map(s => s.rank)
-  const best_finish = Math.min(...finishes)
-  const worst_finish = Math.max(...finishes)
-  const avg_finish = finishes.reduce((a, b) => a + b, 0) / finishes.length
-  
-  // Calculate SDS+ stats
-  const sdsScores = seasons.filter((s): s is ManagerSeasonStats & { sds_plus: number } => s.sds_plus !== undefined).map(s => s.sds_plus)
-  const avg_sds_plus = sdsScores.length > 0
-    ? Math.round((sdsScores.reduce((a, b) => a + b, 0) / sdsScores.length) * 10) / 10
-    : undefined
-  const high_sds_plus = sdsScores.length > 0 ? Math.max(...sdsScores) : undefined
-  const low_sds_plus = sdsScores.length > 0 ? Math.min(...sdsScores) : undefined
-  
-  // Determine if manager is active (played in most recent season)
-  // Get the manager's most recent season year
-  const managerMostRecentYear = seasons.length > 0 ? Math.max(...seasons.map(s => s.year)) : 0
-  const is_active = managerMostRecentYear === mostRecentSeasonYear
-  
-  return {
-    owner_name: ownerName,
-    seasons: seasons.sort((a, b) => b.year - a.year),
-    all_time: {
-      championships,
-      total_wins,
-      total_losses,
-      total_ties,
-      total_points_for,
-      total_points_against,
-      seasons_played: seasons.length,
-      best_finish,
-      worst_finish,
-      avg_finish: Math.round(avg_finish * 10) / 10,
-      avg_sds_plus,
-      high_sds_plus,
-      low_sds_plus,
-    },
-    is_active,
-  }
-}
-
-/**
- * Get manager stats across all seasons (full version with SDS+)
+ * Get manager stats across all seasons (full version with PPSI)
  */
 export async function getManagerStats(ownerName: string): Promise<ManagerStats | null> {
   const leagues = await getAllLeaguesWithMetadata()
@@ -436,7 +315,7 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
   
   const standingsResults = await Promise.all(standingsPromises)
   
-  // Filter to only seasons where manager exists (before parallelizing SDS+ fetches)
+  // Filter to only seasons where manager exists (before parallelizing PPSI fetches)
   const managerSeasons = standingsResults
     .map(({ league, year, standings }) => {
       if (!standings) return null
@@ -446,9 +325,9 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
     })
     .filter((s): s is NonNullable<typeof s> => s !== null)
   
-  // Fetch SDS+ scores in parallel for all seasons where manager exists
+  // Fetch PPSI scores in parallel for all seasons where manager exists
   const sdsPromises = managerSeasons.map(async ({ league, year, managerTeam }) => {
-    // Fetch SDS+ scores for this season (skip weekly scores for performance)
+    // Fetch PPSI scores for this season (skip weekly scores for performance)
     let sdsPlus: number | undefined
     let sdsRank: number | undefined
     
@@ -463,7 +342,7 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
         }
       }
     } catch (error) {
-      // SDS+ calculation failed, continue without it
+      // PPSI calculation failed, continue without it
     }
     
     return {
@@ -500,7 +379,7 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
   const worst_finish = Math.max(...finishes)
   const avg_finish = finishes.reduce((a, b) => a + b, 0) / finishes.length
   
-  // Calculate SDS+ stats
+  // Calculate PPSI stats
   const sdsScores = seasons.filter(s => s.sds_plus !== undefined).map(s => s.sds_plus!)
   const avg_sds_plus = sdsScores.length > 0
     ? Math.round((sdsScores.reduce((a, b) => a + b, 0) / sdsScores.length) * 10) / 10

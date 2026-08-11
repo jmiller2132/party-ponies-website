@@ -6,6 +6,7 @@
 
 import { cache } from 'react'
 import { getUserLeagues } from "@/app/actions/yahoo-actions"
+import { GAME_KEY_TO_YEAR } from "./yahoo-game-keys"
 
 /**
  * Filter leagues to only include relevant ones:
@@ -132,12 +133,6 @@ export async function getAllLeagueKeys(): Promise<string[]> {
   }
 
   return []
-}
-
-const GAME_KEY_TO_YEAR: Record<string, string> = {
-  "314": "2013", "331": "2014", "348": "2015", "359": "2016", "371": "2017",
-  "380": "2018", "390": "2019", "399": "2020", "406": "2021", "414": "2022",
-  "423": "2023", "449": "2024", "461": "2025",
 }
 
 /**

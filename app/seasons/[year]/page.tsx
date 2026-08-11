@@ -1,7 +1,9 @@
-import { getLeagueStandings, getCurrentWeekMatchups, getWeekMatchups, getSDSPlusScores } from "@/app/actions/yahoo-actions"
+import type { Metadata } from "next"
+import { getLeagueStandings, getWeekMatchups, getSDSPlusScores } from "@/app/actions/yahoo-actions"
 import { getLeagueKeyForYear, getAvailableYears } from "@/lib/season-utils"
 import { Suspense } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -10,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Trophy, Medal, Calendar, ArrowLeft, ArrowRight, TrendingUp, Award, Zap, BarChart3, Users, Target, Sparkles } from "lucide-react"
+import { Trophy, Medal, Calendar, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Award, Zap, BarChart3, Sparkles, Minus } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { notFound } from "next/navigation"
@@ -22,253 +24,190 @@ interface SeasonPageProps {
   params: Promise<{ year: string }>
 }
 
-async function SeasonStandings({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-muted-foreground">
-            No league data available for {year} season.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function OwnerLink({ owner, teamName }: { owner: string; teamName?: string }) {
+  return (
+    <div>
+      <Link
+        href={`/managers/${encodeURIComponent(owner)}`}
+        className="font-semibold hover:text-primary transition-colors"
+      >
+        {owner}
+      </Link>
+      {teamName && teamName !== owner && (
+        <p className="text-xs text-muted-foreground">{teamName}</p>
+      )}
+    </div>
+  )
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) return <Trophy className="h-4 w-4 text-yellow-500 shrink-0" />
+  if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 shrink-0" />
+  if (rank === 3) return <Medal className="h-4 w-4 text-amber-600 shrink-0" />
+  return null
+}
+
+function PointDiffCell({ diff }: { diff: number }) {
+  if (diff > 0) return (
+    <span className="flex items-center justify-end gap-0.5 text-green-500 font-medium text-sm">
+      <TrendingUp className="h-3 w-3" />+{diff.toFixed(0)}
+    </span>
+  )
+  if (diff < 0) return (
+    <span className="flex items-center justify-end gap-0.5 text-red-500 font-medium text-sm">
+      <TrendingDown className="h-3 w-3" />{diff.toFixed(0)}
+    </span>
+  )
+  return (
+    <span className="flex items-center justify-end gap-0.5 text-muted-foreground text-sm">
+      <Minus className="h-3 w-3" />0
+    </span>
+  )
+}
+
+function SectionSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-44" />
+        <Skeleton className="h-4 w-56" />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} className="h-5 w-full" />
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Standings ────────────────────────────────────────────────────────────────
+
+async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: number }) {
   const result = await getLeagueStandings(leagueKey)
 
   if (!result.success || !result.data) {
     return (
       <Card>
         <CardContent className="p-6">
-          <p className="text-destructive">
-            {result.error || "Failed to load standings."}
-          </p>
+          <p className="text-destructive font-medium">Failed to load standings</p>
+          <p className="text-sm text-muted-foreground mt-1">{result.error ?? "An unknown error occurred."}</p>
         </CardContent>
       </Card>
     )
   }
 
   const standings = result.data
+    .sort((a: { rank: number }, b: { rank: number }) => a.rank - b.rank)
+
+  const playoffSpots = standings.length <= 10 ? 4 : 6
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-5 w-5" />
-          {year} Season Standings
+          <Trophy className="h-5 w-5 text-yellow-500" />
+          {year} Final Standings
         </CardTitle>
         <CardDescription>
-          Final standings for the {year} season
+          {standings.length} teams · top {playoffSpots} made playoffs
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">Rank</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead className="text-right">W-L-T</TableHead>
-              <TableHead className="text-right">Points For</TableHead>
-              <TableHead className="text-right">Points Against</TableHead>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-14 pl-6">Rank</TableHead>
+              <TableHead>Manager</TableHead>
+              <TableHead className="text-right">Record</TableHead>
+              <TableHead className="text-right">Win %</TableHead>
+              <TableHead className="text-right">PPG</TableHead>
+              <TableHead className="text-right pr-6">+/−</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {standings.map((team) => (
-              <TableRow key={team.team_key}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    {team.rank === 1 && <Trophy className="h-4 w-4 text-yellow-500" />}
-                    {team.rank === 2 && <Medal className="h-4 w-4 text-gray-400" />}
-                    {team.rank === 3 && <Medal className="h-4 w-4 text-amber-600" />}
-                    <span>{team.rank}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="font-semibold">
-                  {team.owner_name || team.name}
-                  {team.owner_name && team.name && team.name !== team.owner_name && (
-                    <span className="text-xs text-muted-foreground ml-2 font-normal">({team.name})</span>
+            {standings.map((team: {
+              team_key: string; rank: number; owner_name: string; name: string;
+              wins: number; losses: number; ties: number; points_for: number; points_against: number;
+            }, index: number) => {
+              const games = team.wins + team.losses + team.ties
+              const winPct = games > 0 ? (team.wins / games * 100).toFixed(1) : "—"
+              const ppg = games > 0 ? (team.points_for / games).toFixed(1) : "—"
+              const diff = team.points_for - team.points_against
+              const owner = team.owner_name || team.name
+              const isPlayoffCutoff = team.rank === playoffSpots
+
+              return (
+                <TableRow
+                  key={`${team.team_key}-${index}`}
+                  className={cn(
+                    team.rank <= playoffSpots ? "bg-green-500/[0.03]" : "",
+                    isPlayoffCutoff && "border-b-2 border-primary/40"
                   )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {team.wins}-{team.losses}
-                  {team.ties > 0 && `-${team.ties}`}
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {team.points_for.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {team.points_against.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            ))}
+                >
+                  <TableCell className="pl-6">
+                    <div className="flex items-center gap-1.5">
+                      <RankBadge rank={team.rank} />
+                      <span className={cn("font-bold tabular-nums", team.rank === 1 && "text-yellow-500")}>
+                        {team.rank}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <OwnerLink owner={owner} teamName={team.name} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {team.wins}-{team.losses}{team.ties > 0 ? `-${team.ties}` : ""}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    {winPct}{winPct !== "—" ? "%" : ""}
+                  </TableCell>
+                  <TableCell className="text-right text-sm font-medium font-mono">
+                    {ppg}
+                  </TableCell>
+                  <TableCell className="text-right pr-6">
+                    <PointDiffCell diff={diff} />
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
-  )
-}
-
-
-async function SeasonChampion({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
-
-  const result = await getLeagueStandings(leagueKey)
-
-  if (!result.success || !result.data || result.data.length === 0) {
-    return null
-  }
-
-  const champion = result.data.find(team => team.rank === 1)
-  
-  if (!champion) {
-    return null
-  }
-
-  return (
-    <Card className="border-yellow-500/50 bg-yellow-500/5">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-6 w-6 text-yellow-500" />
-          {year} Season Champion
-        </CardTitle>
-        <CardDescription>League champion and final standings</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-            <div>
-              <h3 className="text-2xl font-bold">{champion.owner_name || champion.name}</h3>
-              {champion.owner_name && champion.name && champion.name !== champion.owner_name && (
-                <p className="text-sm text-muted-foreground font-normal">{champion.name}</p>
-              )}
-              <p className="text-muted-foreground mt-1">
-                Record: {champion.wins}-{champion.losses}
-                {champion.ties > 0 && `-${champion.ties}`}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Points For</p>
-              <p className="text-2xl font-bold">{champion.points_for.toFixed(2)}</p>
-            </div>
-          </div>
-          
-          {/* Runner-up and 3rd place */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {result.data.find(team => team.rank === 2) && (
-              <div className="p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Medal className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm font-semibold">Runner-Up</span>
-                </div>
-                <p className="font-medium">
-                  {(() => {
-                    const team = result.data.find(team => team.rank === 2)
-                    if (!team) return null
-                    return (
-                      <>
-                        {team.owner_name || team.name}
-                        {team.owner_name && team.name && team.name !== team.owner_name && (
-                          <span className="text-xs text-muted-foreground font-normal ml-1">({team.name})</span>
-                        )}
-                      </>
-                    )
-                  })()}
-                </p>
-              </div>
-            )}
-            {result.data.find(team => team.rank === 3) && (
-              <div className="p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Medal className="h-4 w-4 text-amber-600" />
-                  <span className="text-sm font-semibold">3rd Place</span>
-                </div>
-                <p className="font-medium">
-                  {(() => {
-                    const team = result.data.find(team => team.rank === 3)
-                    if (!team) return null
-                    return (
-                      <>
-                        {team.owner_name || team.name}
-                        {team.owner_name && team.name && team.name !== team.owner_name && (
-                          <span className="text-xs text-muted-foreground font-normal ml-1">({team.name})</span>
-                        )}
-                      </>
-                    )
-                  })()}
-                </p>
-              </div>
-            )}
-          </div>
+        <div className="flex items-center gap-4 px-6 py-3 border-t border-border text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-primary/50 rounded" />
+            Playoff cutoff
+          </span>
+          <span>PPG = Points per game · +/− = Point differential</span>
         </div>
       </CardContent>
     </Card>
   )
 }
 
-async function SeasonRecords({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
+// ─── Season Records ────────────────────────────────────────────────────────────
 
-  const standingsResult = await getLeagueStandings(leagueKey)
-  
-  if (!standingsResult.success || !standingsResult.data || standingsResult.data.length === 0) {
-    return null
-  }
+async function SeasonRecords({ leagueKey, year }: { leagueKey: string; year: number }) {
+  const result = await getLeagueStandings(leagueKey)
+  if (!result.success || !result.data?.length) return null
 
-  const standings = standingsResult.data
+  const standings = result.data
 
-  // Calculate season records
-  const highestPointsFor = standings.reduce((max, team) => 
-    team.points_for > max.points_for ? team : max, standings[0]
-  )
-  
-  const lowestPointsAgainst = standings.reduce((min, team) => 
-    team.points_against < min.points_against ? team : min, standings[0]
-  )
-  
-  const bestRecord = standings.reduce((best, team) => {
-    const bestWinPct = best.wins / (best.wins + best.losses + best.ties)
-    const teamWinPct = team.wins / (team.wins + team.losses + team.ties)
-    return teamWinPct > bestWinPct ? team : best
+  const highPF  = standings.reduce((m: typeof standings[0], t: typeof standings[0]) => t.points_for > m.points_for ? t : m, standings[0])
+  const lowPF   = standings.reduce((m: typeof standings[0], t: typeof standings[0]) => t.points_for < m.points_for ? t : m, standings[0])
+  const bestRec = standings.reduce((m: typeof standings[0], t: typeof standings[0]) => {
+    const mG = m.wins + m.losses + m.ties, tG = t.wins + t.losses + t.ties
+    return (t.wins / (tG || 1)) > (m.wins / (mG || 1)) ? t : m
   }, standings[0])
+  const bestDef = standings.reduce((m: typeof standings[0], t: typeof standings[0]) => t.points_against < m.points_against ? t : m, standings[0])
 
-  // Try to get weekly data for highest single-week score
-  // For now, we'll use Points For as a proxy (could be enhanced with weekly data)
   const records = [
-    {
-      icon: Zap,
-      title: "Highest Points For",
-      owner: highestPointsFor.owner_name || highestPointsFor.name,
-      teamName: highestPointsFor.name,
-      value: highestPointsFor.points_for.toFixed(2),
-      description: "Most total points scored in the season",
-    },
-    {
-      icon: TrendingUp,
-      title: "Best Record",
-      owner: bestRecord.owner_name || bestRecord.name,
-      teamName: bestRecord.name,
-      value: `${bestRecord.wins}-${bestRecord.losses}${bestRecord.ties > 0 ? `-${bestRecord.ties}` : ''}`,
-      description: "Best win-loss record",
-    },
-    {
-      icon: Award,
-      title: "Best Defense",
-      owner: lowestPointsAgainst.owner_name || lowestPointsAgainst.name,
-      teamName: lowestPointsAgainst.name,
-      value: lowestPointsAgainst.points_against.toFixed(2),
-      description: "Fewest points allowed",
-    },
+    { icon: Zap,        color: "text-yellow-500", label: "Highest PF",   owner: highPF.owner_name  || highPF.name,  value: highPF.points_for.toFixed(0)  + " pts" },
+    { icon: TrendingUp, color: "text-green-500",  label: "Best Record",  owner: bestRec.owner_name || bestRec.name, value: `${bestRec.wins}-${bestRec.losses}` },
+    { icon: Award,      color: "text-blue-500",   label: "Best Defense", owner: bestDef.owner_name || bestDef.name, value: bestDef.points_against.toFixed(0) + " PA" },
+    { icon: TrendingDown, color: "text-red-500",  label: "Lowest PF",    owner: lowPF.owner_name   || lowPF.name,  value: lowPF.points_for.toFixed(0)   + " pts" },
   ]
 
   return (
@@ -278,26 +217,25 @@ async function SeasonRecords({ year }: { year: number }) {
           <Award className="h-5 w-5" />
           {year} Season Records
         </CardTitle>
-        <CardDescription>Notable achievements and records from the {year} season</CardDescription>
+        <CardDescription>Notable achievements from the {year} season</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid md:grid-cols-3 gap-4">
-          {records.map((record, index) => {
-            const Icon = record.icon
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {records.map((r) => {
+            const Icon = r.icon
             return (
-              <div key={index} className="p-4 border rounded-lg">
+              <div key={r.label} className="p-4 rounded-lg border border-border/60">
                 <div className="flex items-center gap-2 mb-2">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  <h4 className="font-semibold text-sm">{record.title}</h4>
+                  <Icon className={cn("h-4 w-4", r.color)} />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{r.label}</span>
                 </div>
-                <p className="text-2xl font-bold mb-1">{record.value}</p>
-                <p className="text-sm font-medium">
-                  {record.owner}
-                  {record.owner !== record.teamName && (
-                    <span className="text-xs text-muted-foreground font-normal ml-1">({record.teamName})</span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">{record.description}</p>
+                <p className="text-xl font-black">{r.value}</p>
+                <Link
+                  href={`/managers/${encodeURIComponent(r.owner)}`}
+                  className="text-sm font-medium hover:text-primary transition-colors"
+                >
+                  {r.owner}
+                </Link>
               </div>
             )
           })}
@@ -307,65 +245,85 @@ async function SeasonRecords({ year }: { year: number }) {
   )
 }
 
-async function WeeklyScoresBreakdown({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
+// ─── PPSI ─────────────────────────────────────────────────────────────────────
 
-  // Fetch a few weeks of data (weeks 1-4 as example)
-  const weeks = [1, 2, 3, 4]
-  const weeklyData: { week: number; matchups: any[] }[] = []
+async function PPSIMetrics({ leagueKey, year }: { leagueKey: string; year: number }) {
+  const result = await getSDSPlusScores(leagueKey)
+  if (!result.success || !result.data?.length) return null
 
-  for (const week of weeks) {
-    const result = await getWeekMatchups(leagueKey, week)
-    if (result.success && result.data && result.data.length > 0) {
-      weeklyData.push({ week, matchups: result.data })
-    }
-  }
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          PPSI — Party Ponies Season Index
+        </CardTitle>
+        <CardDescription>
+          Four-pillar metric (Dominance, Scoring, Schedule Luck, Season Result) for cross-season comparison. Click headers to sort.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SDSPlusTable scores={result.data} defaultSort="score" defaultDirection="desc" />
+        <div className="mt-4 grid sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+          <div><strong className="text-yellow-600">110+</strong> — All-time / generational</div>
+          <div><strong className="text-blue-600">95–109</strong> — Elite</div>
+          <div><strong className="text-green-600">80–94</strong> — Very good</div>
+          <div><strong className="text-foreground/70">65–79</strong> — Solid</div>
+          <div><strong className="text-red-600">&lt;65</strong> — Below average</div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
-  if (weeklyData.length === 0) {
-    return null
-  }
+// ─── Weekly Scores ────────────────────────────────────────────────────────────
+
+async function WeeklyScoresBreakdown({ leagueKey, year }: { leagueKey: string; year: number }) {
+  const weeks = [1, 2, 3, 4, 5, 6]
+
+  // Fetch all weeks in parallel
+  const results = await Promise.all(
+    weeks.map(w => getWeekMatchups(leagueKey, w).then(r => ({ week: w, r })))
+  )
+
+  const weeklyData = results
+    .filter(({ r }) => r.success && r.data?.length)
+    .map(({ week, r }) => ({ week, matchups: r.data! }))
+
+  if (weeklyData.length === 0) return null
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5" />
-          Weekly Scores Breakdown
+          Weekly Scores
         </CardTitle>
-        <CardDescription>Weekly scoring summary for the {year} season</CardDescription>
+        <CardDescription>Per-week scoring summary for the {year} season</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
           {weeklyData.map(({ week, matchups }) => {
-            const allScores = matchups.flatMap(m => [m.team1.points, m.team2.points])
-            const highestScore = Math.max(...allScores)
-            const lowestScore = Math.min(...allScores)
-            const avgScore = allScores.reduce((a, b) => a + b, 0) / allScores.length
+            const allScores: number[] = matchups.flatMap((m: { team1: { points: number }; team2: { points: number } }) => [m.team1.points, m.team2.points])
+            const high = Math.max(...allScores)
+            const low  = Math.min(...allScores)
+            const avg  = allScores.reduce((a, b) => a + b, 0) / allScores.length
 
             return (
-              <div key={week} className="p-4 border rounded-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold">Week {week}</h4>
-                  <span className="text-sm text-muted-foreground">
-                    {matchups.length} matchups
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+              <div key={week} className="p-3 rounded-lg border border-border/60 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Week {week}</p>
+                <div className="grid grid-cols-3 gap-1 text-center">
                   <div>
-                    <p className="text-muted-foreground">Highest Score</p>
-                    <p className="font-bold text-lg">{highestScore.toFixed(2)}</p>
+                    <p className="text-base font-bold text-green-500">{high.toFixed(0)}</p>
+                    <p className="text-[10px] text-muted-foreground">High</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Average Score</p>
-                    <p className="font-bold text-lg">{avgScore.toFixed(2)}</p>
+                    <p className="text-base font-bold">{avg.toFixed(0)}</p>
+                    <p className="text-[10px] text-muted-foreground">Avg</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Lowest Score</p>
-                    <p className="font-bold text-lg">{lowestScore.toFixed(2)}</p>
+                    <p className="text-base font-bold text-red-500">{low.toFixed(0)}</p>
+                    <p className="text-[10px] text-muted-foreground">Low</p>
                   </div>
                 </div>
               </div>
@@ -377,232 +335,39 @@ async function WeeklyScoresBreakdown({ year }: { year: number }) {
   )
 }
 
-async function HeadToHeadRecords({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
+// ─── Playoff Bracket ──────────────────────────────────────────────────────────
 
-  const standingsResult = await getLeagueStandings(leagueKey)
-  
-  if (!standingsResult.success || !standingsResult.data || standingsResult.data.length === 0) {
-    return null
-  }
-
-  const standings = standingsResult.data
-
-  // Calculate head-to-head records (simplified - would need matchup history for full accuracy)
-  // For now, show win percentages and common opponents
-  const h2hRecords = standings.map(team => {
-    const winPct = team.wins / (team.wins + team.losses + team.ties) || 0
-    return {
-      owner: team.owner_name || team.name,
-      teamName: team.name,
-      team_key: team.team_key,
-      wins: team.wins,
-      losses: team.losses,
-      winPct: winPct,
-      pointsFor: team.points_for,
-    }
-  }).sort((a, b) => b.winPct - a.winPct)
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Target className="h-5 w-5" />
-          Head-to-Head Records
-        </CardTitle>
-        <CardDescription>Win percentages and records for the {year} season</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Owner</TableHead>
-              <TableHead className="text-right">W-L</TableHead>
-              <TableHead className="text-right">Win %</TableHead>
-              <TableHead className="text-right">Points For</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {h2hRecords.map((record) => (
-              <TableRow key={record.team_key}>
-                <TableCell className="font-semibold">
-                  {record.owner}
-                  {record.owner !== record.teamName && (
-                    <span className="text-xs text-muted-foreground font-normal ml-2">({record.teamName})</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {record.wins}-{record.losses}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(record.winPct * 100).toFixed(1)}%
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {record.pointsFor.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  )
+async function PlayoffBracket({ leagueKey }: { leagueKey: string }) {
+  const result = await getLeagueStandings(leagueKey)
+  if (!result.success || !result.data?.length) return null
+  return <PlayoffBracketComponent standings={result.data} year={0} />
 }
 
-async function SDSPlusMetrics({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
+// ─── Metadata ─────────────────────────────────────────────────────────────────
+
+export async function generateMetadata({ params }: SeasonPageProps): Promise<Metadata> {
+  const { year } = await params
+  return {
+    title: `${year} Season`,
+    description: `Party Ponies fantasy football ${year} season — standings, champion, PPSI scores, playoff bracket, and full stats.`,
+    openGraph: {
+      title: `${year} Season · Party Ponies`,
+      description: `Full standings, champion, and PPSI scores for the ${year} Party Ponies fantasy football season.`,
+    },
   }
-
-  const result = await getSDSPlusScores(leagueKey)
-
-  if (!result.success || !result.data || result.data.length === 0) {
-    return null
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-          SDS+ (Season Dominance Score Plus)
-        </CardTitle>
-        <CardDescription>
-          A luck-adjusted dominance metric that prioritizes true performance over playoff variance.
-          Click column headers to sort. Hover over column headers for metric explanations.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <SDSPlusTable scores={result.data} defaultSort="finalRank" defaultDirection="asc" />
-        <div className="mt-4 p-4 bg-muted rounded-lg">
-          <h4 className="font-semibold text-sm mb-2">Interpretation Guide</h4>
-          <div className="grid md:grid-cols-2 gap-2 text-xs text-muted-foreground">
-            <div><strong className="text-yellow-600">95+</strong> → All-time, era-defining season</div>
-            <div><strong className="text-blue-600">85–94</strong> → Dominant, likely robbed by variance</div>
-            <div><strong className="text-green-600">75–84</strong> → Elite champion or contender</div>
-            <div><strong className="text-gray-600">65–74</strong> → Solid title or strong season</div>
-            <div><strong>&lt;65</strong> → Average or luck-driven outcome</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
-async function PerformanceTrends({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
-
-  const standingsResult = await getLeagueStandings(leagueKey)
-  
-  if (!standingsResult.success || !standingsResult.data || standingsResult.data.length === 0) {
-    return null
-  }
-
-  const standings = standingsResult.data
-
-  // Calculate trends: points per game, consistency, etc.
-  const trends = standings.map(team => {
-    const gamesPlayed = team.wins + team.losses + team.ties
-    const pointsPerGame = gamesPlayed > 0 ? team.points_for / gamesPlayed : 0
-    const pointsAgainstPerGame = gamesPlayed > 0 ? team.points_against / gamesPlayed : 0
-    
-    return {
-      owner: team.owner_name || team.name,
-      teamName: team.name,
-      team_key: team.team_key,
-      pointsPerGame: pointsPerGame,
-      pointsAgainstPerGame: pointsAgainstPerGame,
-      differential: pointsPerGame - pointsAgainstPerGame,
-      rank: team.rank,
-    }
-  }).sort((a, b) => b.differential - a.differential)
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5" />
-          Performance Trends
-        </CardTitle>
-        <CardDescription>Points per game and performance metrics for the {year} season</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Owner</TableHead>
-              <TableHead className="text-right">PPG</TableHead>
-              <TableHead className="text-right">PAPG</TableHead>
-              <TableHead className="text-right">Differential</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {trends.map((trend) => (
-              <TableRow key={trend.team_key}>
-                <TableCell className="font-semibold">
-                  {trend.owner}
-                  {trend.owner !== trend.teamName && (
-                    <span className="text-xs text-muted-foreground font-normal ml-2">({trend.teamName})</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {trend.pointsPerGame.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {trend.pointsAgainstPerGame.toFixed(2)}
-                </TableCell>
-                <TableCell className={cn(
-                  "text-right font-semibold",
-                  trend.differential > 0 ? "text-green-600" : "text-red-600"
-                )}>
-                  {trend.differential > 0 ? '+' : ''}{trend.differential.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  )
-}
-
-async function PlayoffBracket({ year }: { year: number }) {
-  const leagueKey = await getLeagueKeyForYear(year)
-  
-  if (!leagueKey) {
-    return null
-  }
-
-  const standingsResult = await getLeagueStandings(leagueKey)
-  
-  if (!standingsResult.success || !standingsResult.data || standingsResult.data.length === 0) {
-    return null
-  }
-
-  const standings = standingsResult.data
-  
-  return <PlayoffBracketComponent standings={standings} year={year} />
-}
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SeasonPage({ params }: SeasonPageProps) {
   const { year: yearParam } = await params
   const year = parseInt(yearParam)
-  
+
   const availableYears = await getAvailableYears()
-  
-  if (isNaN(year) || !availableYears.includes(year)) {
-    notFound()
-  }
+  if (isNaN(year) || !availableYears.includes(year)) notFound()
+
+  const leagueKey = await getLeagueKeyForYear(year)
+  if (!leagueKey) notFound()
 
   const currentYear = new Date().getFullYear()
   const isCurrentSeason = year === currentYear
@@ -612,96 +377,73 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
-      {/* Header with navigation */}
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/leagues">
+          <Link href="/seasons">
             <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Seasons
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Seasons
             </Button>
           </Link>
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <h1 className="font-display text-4xl font-bold">{year} Season</h1>
               {isCurrentSeason && (
-                <span className="px-2 py-1 text-xs font-semibold bg-yellow-500/20 text-yellow-600 rounded-full">
+                <span className="px-2 py-0.5 text-xs font-semibold bg-primary/20 text-primary rounded-full">
                   Current
                 </span>
               )}
             </div>
-            <p className="text-muted-foreground">
-              Standings, records, and statistics from the {year} season
+            <p className="text-muted-foreground text-sm mt-1">
+              Standings, PPSI scores, and playoff bracket
             </p>
           </div>
         </div>
-        
-        {/* Season navigation */}
+
+        {/* Prev / Next season nav */}
         <div className="flex items-center gap-2">
           {prevYear && (
             <Link href={`/seasons/${prevYear}`}>
               <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4" />
-                {prevYear}
+                <ArrowLeft className="h-4 w-4" />{prevYear}
               </Button>
             </Link>
           )}
           {nextYear && (
             <Link href={`/seasons/${nextYear}`}>
               <Button variant="outline" size="sm">
-                {nextYear}
-                <ArrowRight className="h-4 w-4" />
+                {nextYear}<ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           )}
         </div>
       </div>
 
-      {/* Standings */}
-      <Suspense fallback={
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">Loading standings...</p>
-          </CardContent>
-        </Card>
-      }>
-        <SeasonStandings year={year} />
+      {/* 1. Standings */}
+      <Suspense fallback={<SectionSkeleton rows={10} />}>
+        <SeasonStandings leagueKey={leagueKey} year={year} />
       </Suspense>
 
-      {/* Season Champion */}
-      <Suspense fallback={null}>
-        <SeasonChampion year={year} />
+      {/* 2. Season Records (stat highlights) */}
+      <Suspense fallback={<SectionSkeleton rows={2} />}>
+        <SeasonRecords leagueKey={leagueKey} year={year} />
       </Suspense>
 
-      {/* Season Records */}
-      <Suspense fallback={null}>
-        <SeasonRecords year={year} />
+      {/* 3. PPSI */}
+      <Suspense fallback={<SectionSkeleton rows={10} />}>
+        <PPSIMetrics leagueKey={leagueKey} year={year} />
       </Suspense>
 
-      {/* Weekly Scores Breakdown */}
-      <Suspense fallback={null}>
-        <WeeklyScoresBreakdown year={year} />
+      {/* 4. Weekly Scores */}
+      <Suspense fallback={<SectionSkeleton rows={3} />}>
+        <WeeklyScoresBreakdown leagueKey={leagueKey} year={year} />
       </Suspense>
 
-      {/* Head-to-Head Records */}
-      <Suspense fallback={null}>
-        <HeadToHeadRecords year={year} />
-      </Suspense>
-
-      {/* SDS+ Metrics */}
-      <Suspense fallback={null}>
-        <SDSPlusMetrics year={year} />
-      </Suspense>
-
-      {/* Team Performance Trends */}
-      <Suspense fallback={null}>
-        <PerformanceTrends year={year} />
-      </Suspense>
-
-      {/* Playoff Bracket */}
-      <Suspense fallback={null}>
-        <PlayoffBracket year={year} />
+      {/* 5. Playoff Bracket */}
+      <Suspense fallback={<SectionSkeleton rows={4} />}>
+        <PlayoffBracket leagueKey={leagueKey} />
       </Suspense>
     </div>
   )

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
 import { Navigation } from "@/components/navigation";
+import { Footer } from "@/components/footer";
 import { Providers } from "./providers";
 
 const roboto = Roboto({
@@ -11,8 +12,20 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Party Ponies Fantasy League | League History & Records",
-  description: "Premium Fantasy Football League platform with historical records, standings, and rivalry tracking",
+  metadataBase: new URL(process.env.NEXTAUTH_URL ?? "https://www.partyponiesff.com"),
+  title: {
+    default: "Party Ponies Fantasy League",
+    template: "%s · Party Ponies",
+  },
+  description: "13+ seasons of Party Ponies fantasy football history — standings, records, PPSI rankings, and rivalry tracking.",
+  openGraph: {
+    siteName: "Party Ponies Fantasy League",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({
@@ -28,6 +41,7 @@ export default function RootLayout({
         <Providers>
           <Navigation />
           <main className="min-h-screen">{children}</main>
+          <Footer />
         </Providers>
       </body>
     </html>

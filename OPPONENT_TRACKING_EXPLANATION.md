@@ -1,92 +1,48 @@
-# Opponent Tracking for Strength of Schedule (SoS)
+# Schedule Luck in PPSI
 
-## Current Implementation
-Right now, SoS uses **league average** opponent quality for all teams:
-- Formula: `SoS = 1 + (avg opponent APW - 0.50)`
-- Since we use league average, everyone gets ~1.0
-- **Result**: SoS doesn't differentiate teams at all
+## How PPSI Handles Schedule Fairness
 
-## What Opponent Tracking Would Do
+PPSI (Party Ponies Season Index) uses a **Schedule Luck Adjustment** pillar instead of a Strength of Schedule multiplier.
 
-### The Concept
-Track which **actual opponents** each team faced during the regular season, then calculate the average All-Play Win Percentage (APW) of those specific opponents.
+### The Formula
 
-### Example Scenario
-Imagine a 10-team league where:
-- **Team A** faced: Teams ranked #2, #3, #4, #5, #6, #7, #8, #9, #10, #1 (in order)
-- **Team B** faced: Teams ranked #9, #10, #8, #7, #6, #5, #4, #3, #2, #1 (in order)
+```
+Schedule Luck = (APW − actual_win%) × 15
+```
 
-Team A faced harder opponents on average, so their SoS would be > 1.0
-Team B faced easier opponents on average, so their SoS would be < 1.0
+Where:
+- **APW** = All-Play Win Percentage (how often you beat every other team each week)
+- **actual_win%** = your real record wins / total games
 
-### Implementation Steps
+### Why It Works
 
-1. **Track Opponents Per Week**
-   - When fetching weekly matchups, record which team played which opponent each week
-   - Example: Week 1: Team A vs Team B → Team A's opponent = Team B
+All-Play Win% already captures how dominant you truly were — it's schedule-neutral by definition. The gap between APW and your actual record reveals how much your schedule helped or hurt you:
 
-2. **Calculate Opponent APW**
-   - For each team, get all opponents they faced during regular season
-   - Calculate each opponent's All-Play Win Percentage
-   - Average those APWs to get `APW_opp`
+| Situation | APW | Actual Win% | Adjustment | Meaning |
+|-----------|-----|-------------|------------|---------|
+| Unlucky | 0.70 | 0.45 | +3.8 pts | You beat 70% of the league each week but only won 45% of matchups — tough draws |
+| Neutral | 0.60 | 0.60 | 0 pts | Your record matched your true performance |
+| Lucky | 0.40 | 0.60 | -3.0 pts | You won 60% despite only beating 40% of the field — soft schedule |
 
-3. **Calculate SoS**
-   - `SoS = 1 + (APW_opp - 0.50)`
-   - If `APW_opp = 0.60` (faced strong teams) → `SoS = 1.10` (10% harder schedule)
-   - If `APW_opp = 0.40` (faced weak teams) → `SoS = 0.90` (10% easier schedule)
+### Range
 
-### Impact on SDS+ Score
+Typical adjustment is ±3–5 points. Extreme cases (APW vs win% differing by 35%+) approach ±7 points.
 
-Since SoS **multiplies the entire base score**, it can significantly affect rankings:
+### Why Not a SoS Multiplier?
 
-**Example:**
-- Team A: Base score = 0.85, SoS = 1.10 → Final = 0.935
-- Team B: Base score = 0.85, SoS = 0.90 → Final = 0.765
+The old SDS+ formula used a SoS multiplier on the entire base score, which could swing totals by 10–20% — too much influence for a factor that's partially outside a team's control. The additive adjustment in PPSI keeps the effect principled and bounded.
 
-A 20% difference in SoS creates a meaningful adjustment!
+### Opponent Tracking Data
 
-### What It Would Require
+The weekly score fetcher (`fetchAllWeeklyScores`) already returns `opponent_key` per matchup record:
 
-1. **Modify `fetchAllWeeklyScores`** to also return opponent information:
-   ```typescript
-   {
-     team_key: string
-     week: number
-     points: number
-     opponent_key: string  // NEW: Track opponent
-   }
-   ```
+```typescript
+{
+  team_key: string
+  week: number
+  points: number
+  opponent_key: string  // which team you faced
+}
+```
 
-2. **Update `calculateOpponentAPW`** to:
-   - Accept opponent tracking data
-   - Filter opponents for each team
-   - Calculate average APW of those specific opponents
-
-3. **Performance Consideration**:
-   - Already fetching matchups, so minimal additional API calls
-   - Just need to extract opponent info from existing matchup data
-
-### Benefits
-
-- **Fairness**: Teams with harder schedules get credit
-- **Accuracy**: Better reflects true team strength
-- **Differentiation**: SoS would actually vary between teams (currently all ~1.0)
-
-### Trade-offs
-
-- **Complexity**: More data to track and process
-- **Edge Cases**: What if a team faced the same opponent twice? (Count both)
-- **Playoff Impact**: Should only count regular season opponents
-
-## Recommendation
-
-**Worth implementing** because:
-1. We already have the matchup data
-2. It would make SoS meaningful (currently useless)
-3. It's a relatively small code change
-4. It significantly improves metric accuracy
-
-The main work is:
-- Extracting opponent info from matchups (already fetched)
-- Storing it alongside weekly scores
-- Calculating average opponent APW per team
+This data is available if you want to build more granular schedule analysis in the future (e.g., showing a team's actual schedule difficulty on the manager profile page).

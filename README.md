@@ -4,22 +4,22 @@ A premium Fantasy Football League website that syncs with the Yahoo Fantasy Spor
 
 ## Features
 
-- 🏆 **Live Standings** - Real-time league standings synced from Yahoo Fantasy Sports
-- 📊 **Live Scores** - Broadcast-style scoreboard for current week matchups
-- 👥 **Manager Profiles** - Detailed profiles with historical stats and achievements
-- 🏅 **All-Time Records** - Historical records preserved in Supabase
-- ⚔️ **Rivalry Tool** - Track head-to-head matchups and fierce rivalries
-- 🔐 **Yahoo OAuth** - Secure authentication with automatic token refresh
-- 💾 **Historical Data** - Permanent storage of league history in Supabase
+- 🏆 **Live Standings** — Real-time league standings synced from Yahoo Fantasy Sports
+- 📅 **Season History** — Full standings, records, and playoff brackets for every season
+- 📊 **PPSI** — Party Ponies Season Index: a four-pillar metric for comparing seasons across all years
+- 👥 **Manager Profiles** — Detailed profiles with historical stats and head-to-head records
+- ⚔️ **Rivalry Tool** — Track head-to-head matchups and fierce rivalries
+- 🔐 **Yahoo OAuth** — Secure authentication with automatic token refresh
+- 💾 **Historical Data** — Permanent storage of league history in Supabase
 
 ## Tech Stack
 
-- **Framework:** Next.js 15 (App Router)
+- **Framework:** Next.js 16 (App Router + Pages Router for NextAuth)
 - **Styling:** Tailwind CSS + Shadcn/UI
-- **Authentication:** NextAuth.js with Yahoo OAuth provider
+- **Authentication:** NextAuth.js with custom Yahoo OAuth provider
 - **Database:** Supabase (PostgreSQL)
 - **Icons:** Lucide React
-- **Deployment:** Vercel (Free Tier)
+- **Deployment:** Vercel
 
 ## Getting Started
 
@@ -32,38 +32,32 @@ A premium Fantasy Football League website that syncs with the Yahoo Fantasy Spor
 ### Step 1: Clone and Install
 
 ```bash
-# Install dependencies
 npm install
 ```
 
 ### Step 2: Set Up Yahoo Developer Account
 
 1. Go to https://developer.yahoo.com/apps
-2. Create a new application
-3. Select "Fantasy Sports" as the API
-4. Set the callback URL to: `http://localhost:3000/api/auth/callback/yahoo` (local) or `https://www.partyponiesff.com/api/auth/callback/yahoo` (production)
-5. Note down your Client ID and Client Secret
+2. Create a new application (Confidential Client type)
+3. Set the callback URL to: `https://localhost:3000/api/auth/callback/yahoo` (local) or `https://www.partyponiesff.com/api/auth/callback/yahoo` (production)
+4. Note your Client ID and Client Secret
+5. Apply for Fantasy Sports API access at https://sports.yahoo.com/developer/access/
 
 ### Step 3: Set Up Supabase
 
 1. Create a new project at https://supabase.com
-2. Set up Supabase CLI (see `SUPABASE_SETUP.md` for complete instructions):
+2. Apply the schema:
    ```bash
-   npm install -g supabase
    supabase login
-   npm run supabase-init
-   npm run supabase-link  # You'll need your project ref
-   npm run db-push        # Apply all migrations
+   supabase link --project-ref YOUR_PROJECT_REF
+   npm run db-push
    ```
-3. Note down your:
-   - Project URL (`NEXT_PUBLIC_SUPABASE_URL`)
-   - Anon Key (`NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-   - Service Role Key (`SUPABASE_SERVICE_ROLE_KEY`) - Keep this secret!
+3. Note your Project URL, Anon Key, and Service Role Key
 
 ### Step 4: Configure Environment Variables
 
 1. Copy `.env.local.example` to `.env.local`
-2. Fill in all the required values:
+2. Fill in all required values:
 
 ```env
 YAHOO_CLIENT_ID=your_yahoo_client_id
@@ -71,9 +65,9 @@ YAHOO_CLIENT_SECRET=your_yahoo_client_secret
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=https://localhost:3000
 NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
-NEXT_PUBLIC_YAHOO_LEAGUE_KEY=nfl.2024.l.123456
+NEXT_PUBLIC_ALLOWED_LEAGUE_KEYS=423.l.12345,414.l.12345,...
 ```
 
 **Generate NextAuth Secret:**
@@ -81,18 +75,13 @@ NEXT_PUBLIC_YAHOO_LEAGUE_KEY=nfl.2024.l.123456
 openssl rand -base64 32
 ```
 
-**Find Your League Key:**
-- Format: `{game_key}.l.{league_id}`
-- Example: `nfl.2024.l.123456`
-- You can find this in your Yahoo Fantasy League URL or via the API after authentication
-
 ### Step 5: Run the Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [https://localhost:3000](https://localhost:3000) in your browser. Yahoo OAuth requires HTTPS even on localhost.
 
 ### Step 6: Sign In
 
@@ -103,108 +92,86 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Preventing Supabase Pause (Free Tier)
 
-Supabase pauses free-tier projects after about **7 days of inactivity**. To keep your project active:
+Supabase pauses free-tier projects after ~7 days of inactivity. Set up a cron job to ping the keepalive URL every 5 days:
 
-1. **Deploy your app** (e.g. to Vercel) so the keepalive endpoint is reachable.
-2. **Ping the keepalive URL** every 5–6 days. Use one of these free options:
-   - **[cron-job.org](https://cron-job.org)** – Create a free account → Create Cronjob → URL: `https://www.partyponiesff.com/api/keepalive` → Schedule: every 5 days.
-   - **[UptimeRobot](https://uptimerobot.com)** – Add monitor → HTTP(s) → URL: `https://www.partyponiesff.com/api/keepalive` → Check interval: 5 days (or daily for uptime checks).
-3. The `/api/keepalive` route runs a tiny Supabase query so the project counts as active.
-
-Alternatively, upgrade to [Supabase Pro](https://supabase.com/pricing) (no auto-pause).
+- **[cron-job.org](https://cron-job.org)** — URL: `https://www.partyponiesff.com/api/keepalive`
+- **[UptimeRobot](https://uptimerobot.com)** — Add HTTP monitor to same URL
 
 ## Project Structure
 
 ```
 party-ponies-website/
 ├── app/
-│   ├── actions/          # Server Actions for data fetching
-│   ├── api/auth/         # NextAuth API routes
-│   ├── auth/             # Authentication pages
-│   ├── standings/        # Standings page
-│   ├── managers/         # Manager profiles page
-│   ├── records/          # All-time records page
-│   └── rivalry/          # Rivalry tool page
+│   ├── actions/              # Server Actions for data fetching
+│   ├── api/auth/             # NextAuth API routes + error page
+│   ├── auth/                 # Sign-in page
+│   ├── standings/            # Current-season standings
+│   ├── seasons/              # Season index + [year] detail + compare
+│   ├── managers/             # Manager profiles
+│   └── rivalry/              # Rivalry tool
 ├── components/
-│   ├── ui/               # Shadcn/UI components
-│   ├── live-scores.tsx   # Live scores component
-│   └── navigation.tsx    # Main navigation
+│   ├── ui/                   # Shadcn/UI components
+│   ├── sds-plus-table.tsx    # PPSI table (sortable, filterable)
+│   ├── sds-formula.tsx       # PPSI formula explainer
+│   └── navigation.tsx        # Main navigation
 ├── lib/
-│   ├── providers/        # Custom OAuth providers
-│   ├── supabase.ts       # Supabase client
-│   ├── yahoo-api.ts      # Yahoo API client
-│   ├── yahoo-auth.ts     # Token refresh logic
-│   └── utils.ts          # Utility functions
-└── supabase/
-    └── schema.sql        # Database schema
+│   ├── providers/yahoo.ts    # Custom Yahoo OAuth provider
+│   ├── sds-plus.ts           # PPSI scoring algorithm
+│   ├── yahoo-game-keys.ts    # Shared game key → year mapping
+│   ├── yahoo-api.ts          # Yahoo API client
+│   ├── yahoo-auth.ts         # Token refresh logic
+│   └── cache.ts              # Supabase caching layer
+├── pages/api/auth/           # NextAuth Pages Router handler (required for v4)
+└── supabase/schema.sql       # Database schema
 ```
 
-## Key Features Explained
+## Key Features
+
+### PPSI — Party Ponies Season Index
+
+A four-pillar metric for comparing seasons across years:
+
+| Pillar | Range | What it measures |
+|--------|-------|-----------------|
+| Dominance | 0–50 | All-Play Win% × 50 (schedule-neutral) |
+| Scoring | 0–55+ | Era-adjusted points (vs. league avg + percentile) |
+| Schedule Luck | ±7 | (APW − actual win%) × 15 |
+| Season Result | 0–30 | Champion +30, Runner-up +18, 3rd +10, 4th +4 |
+
+Score thresholds: 110+ all-time | 95–109 elite | 80–94 very good | 65–79 solid | below 65 below average
 
 ### Yahoo OAuth Integration
 
-The app uses NextAuth.js with a custom Yahoo OAuth provider. Tokens are automatically refreshed to prevent expiration and stored in Supabase for offline access.
+Uses NextAuth.js with a custom Yahoo OAuth provider. Tokens are stored in Supabase and refreshed automatically. Note: Yahoo requires HTTPS even on localhost — use `https://localhost:3000`.
 
-### Token Refresh Logic
+### Game Key Mapping
 
-Yahoo tokens expire after 60 minutes. The app automatically refreshes tokens using the refresh token stored in Supabase. The refresh logic is handled in `lib/yahoo-auth.ts`.
-
-### Server Actions
-
-Data fetching is done via Server Actions (`app/actions/yahoo-actions.ts`) which:
-- Handle authentication
-- Fetch data from Yahoo API
-- Return formatted responses
-- Can be called from Server Components for optimal performance
-
-### Historical Data Storage
-
-League standings and matchups are stored in Supabase for permanent access. Yahoo only provides access to recent seasons, so this database preserves your league's full history.
+Yahoo uses numeric "game keys" to identify seasons (e.g. `423` = 2023 season). The canonical mapping lives in `lib/yahoo-game-keys.ts` — update it when Yahoo releases a new season.
 
 ## Deployment to Vercel
 
-1. Push your code to GitHub
-2. Import the repository in Vercel
-3. Add all environment variables in Vercel's dashboard
-4. Deploy!
+1. Push to GitHub
+2. Import in Vercel, add all environment variables
+3. Set `NEXTAUTH_URL` to `https://www.partyponiesff.com`
+4. Deploy
 
-**Important:** Update your Yahoo app's callback URL to:
-`https://www.partyponiesff.com/api/auth/callback/yahoo`
-
-## Customization
-
-### Changing the Theme
-
-The app uses a dark theme by default. To customize:
-- Edit `app/globals.css` for color variables
-- Modify `tailwind.config.ts` for extended theme options
-
-### Adding More Pages
-
-1. Create a new page in `app/[page-name]/page.tsx`
-2. Add a navigation item in `components/navigation.tsx`
+**Important:** Yahoo's callback URL in your app settings must exactly match `NEXTAUTH_URL + /api/auth/callback/yahoo`.
 
 ## Troubleshooting
 
-### "Not authenticated" errors
-- Make sure you've signed in with Yahoo
-- Check that your Yahoo app callback URL matches your deployment URL
-- Verify environment variables are set correctly
+### "Not authenticated" / OAuth errors
+- Ensure Yahoo callback URL exactly matches `NEXTAUTH_URL/api/auth/callback/yahoo` (no trailing slash)
+- Yahoo requires https even for localhost — use `https://localhost:3000`
+- Check `AUTH_DEBUG=true` in Vercel env vars for detailed NextAuth logs
 
 ### Token refresh issues
-- Ensure `SUPABASE_SERVICE_ROLE_KEY` is set correctly
-- Check that the `yahoo_tokens` table exists in Supabase
-- Verify RLS policies allow token storage
+- Verify `SUPABASE_SERVICE_ROLE_KEY` is correct
+- Check `yahoo_tokens` table exists and RLS policies are set
 
-### API errors
-- Check your Yahoo Developer app is approved for Fantasy Sports API
-- Verify your league key format is correct
-- Ensure you have the `fspt-r` scope in your OAuth request
+### Fantasy Sports API access
+- New Yahoo apps must apply for Fantasy Sports API access at https://sports.yahoo.com/developer/access/
+- Until approved, auth will fail with `invalid_scope` on the `fspt-r` scope
 
 ## License
 
 MIT
-
-## Support
-
-For issues or questions, please open an issue on GitHub.

@@ -9,21 +9,6 @@ function withCanonicalHost(
   handler: (req: NextApiRequest, res: NextApiResponse) => void
 ) {
   const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "")
-  const action = (req.query?.nextauth as string[])?.[0]
-  const providerId = (req.query?.nextauth as string[])?.[1]
-  const isCallback = action === "callback"
-
-  if (isCallback) {
-    const raw = req.headers as Record<string, string | string[] | undefined>
-    console.log("[NextAuth callback]", {
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? "(not set)",
-      "req.headers[x-forwarded-host]": raw["x-forwarded-host"],
-      "req.headers[host]": raw["host"],
-      "req.headers[x-forwarded-proto]": raw["x-forwarded-proto"],
-      appliedProxy: !!baseUrl,
-      providerId,
-    })
-  }
 
   if (baseUrl) {
     try {
@@ -47,21 +32,15 @@ function withCanonicalHost(
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   return withCanonicalHost(req, res, async (r, s) => {
-    const action = (r.query?.nextauth as string[])?.[0]
-    const isCallback = action === "callback"
     try {
-      const result = await NextAuth(r, s, authOptions)
-      return result
+      return await NextAuth(r, s, authOptions)
     } catch (err: unknown) {
       const error = err as Error
       console.error("[NextAuth handler error]", {
-        action: isCallback ? "callback" : action,
-        error: error.message,
-        stack: error.stack,
-        query: r.query,
+        action: (r.query?.nextauth as string[])?.[0],
         providerId: (r.query?.nextauth as string[])?.[1],
+        error: error.message,
       })
-      // Only redirect if response hasn't been sent
       if (!s.headersSent) {
         s.redirect(302, `/api/auth/error?error=Callback&details=${encodeURIComponent(error.message)}`)
       }

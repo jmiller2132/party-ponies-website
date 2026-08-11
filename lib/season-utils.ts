@@ -3,6 +3,7 @@
  */
 
 import { getAllLeaguesWithMetadata } from "./league-utils"
+export { GAME_KEY_TO_YEAR } from "./yahoo-game-keys"
 
 /**
  * Get the league key for a specific year/season

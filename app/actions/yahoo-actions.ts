@@ -1,20 +1,11 @@
 "use server"
 
 import { fetchLeagueStandings, fetchCurrentWeekMatchups, fetchUserLeagues, fetchWeekMatchups, fetchAllWeeklyScores } from "@/lib/yahoo-api"
-import { calculateSDSPlus } from "@/lib/sds-plus"
+import { calculatePPSI } from "@/lib/sds-plus"
 import { getSession } from "@/lib/auth"
 import { getCachedStandings, cacheStandings, getCachedSDSPlus, cacheSDSPlus, getCachedMatchups, cacheMatchups } from "@/lib/cache"
 import { getAllLeaguesWithMetadata } from "@/lib/league-utils"
-
-/**
- * Server Action to fetch league standings
- * Uses cached data from Supabase when available, otherwise fetches from Yahoo API
- */
-const GAME_KEY_TO_YEAR: Record<string, string> = {
-  "314": "2013", "331": "2014", "348": "2015", "359": "2016", "371": "2017",
-  "380": "2018", "390": "2019", "399": "2020", "406": "2021", "414": "2022",
-  "423": "2023", "449": "2024", "461": "2025",
-}
+import { GAME_KEY_TO_YEAR } from "@/lib/yahoo-game-keys"
 
 export async function getLeagueStandings(leagueKey: string) {
   try {
@@ -119,9 +110,9 @@ export async function getAllWeeklyScores(leagueKey: string) {
 }
 
 /**
- * Server Action to calculate SDS+ for a season
- * Uses cached data from Supabase when available, otherwise calculates and caches
- * For comparison page, can skip weekly scores to improve performance
+ * Server Action to calculate PPSI for a season.
+ * Uses cached data from Supabase when available, otherwise calculates and caches.
+ * For comparison page, skipWeeklyScores=true improves performance.
  */
 export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: boolean = false) {
   try {
@@ -132,14 +123,8 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
       const league = leagues.find(l => l.league_key === leagueKey)
       season = league?.season || new Date().getFullYear().toString()
     } catch {
-      // Fallback: parse season from league key
-      const gameKeyToYear: Record<string, string> = {
-        "314": "2013", "331": "2014", "348": "2015", "359": "2016", "371": "2017",
-        "380": "2018", "390": "2019", "399": "2020", "406": "2021", "414": "2022",
-        "423": "2023", "449": "2024", "461": "2025",
-      }
       const gameKey = leagueKey.split('.')[0]
-      season = gameKeyToYear[gameKey] || new Date().getFullYear().toString()
+      season = GAME_KEY_TO_YEAR[gameKey] || new Date().getFullYear().toString()
     }
     
     // Check cache first (only if skipping weekly scores - cached scores don't have full breakdown)
@@ -191,7 +176,7 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
       : 14
     const regularSeasonWeeks = Math.min(maxWeek, 14)
 
-    const scores = calculateSDSPlus(standingsResult.data, weeklyScores, regularSeasonWeeks)
+    const scores = calculatePPSI(standingsResult.data, weeklyScores, regularSeasonWeeks)
     
     // Merge standings data (W-L-T, PF, PA) into scores
     const scoresWithStats = scores.map(score => {
@@ -215,10 +200,10 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
 
     return { success: true, data: scoresWithStats }
   } catch (error) {
-    console.error("Error calculating SDS+:", error)
+    console.error("Error calculating PPSI:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to calculate SDS+"
+      error: error instanceof Error ? error.message : "Failed to calculate PPSI"
     }
   }
 }

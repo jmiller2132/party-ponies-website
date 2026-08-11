@@ -1,5 +1,15 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { getAllManagerStatsLightweight, ManagerStats } from "@/lib/manager-utils"
+import type { Metadata } from "next"
+import { Card, CardContent } from "@/components/ui/card"
+
+export const metadata: Metadata = {
+  title: "Manager Profiles",
+  description: "Career stats, head-to-head records, and PPSI scores for every Party Ponies fantasy football manager across 13+ seasons.",
+  openGraph: {
+    title: "Manager Profiles · Party Ponies",
+    description: "Career stats and history for every Party Ponies manager — wins, losses, championships, and PPSI rankings.",
+  },
+}
+import { getAllManagerStatsLightweight } from "@/lib/manager-utils"
 import { Suspense, cache } from "react"
 import { ManagersListClient } from "./managers-list-client"
 

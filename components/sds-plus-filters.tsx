@@ -125,9 +125,9 @@ export function SDSPlusFilters({ availableYears, uniqueOwners, onFilterChange }:
           </div>
         </div>
 
-        {/* SDS+ Range */}
+        {/* PPSI Range */}
         <div className="space-y-2">
-          <Label className="text-xs">SDS+ Range</Label>
+          <Label className="text-xs">PPSI Range</Label>
           <div className="flex gap-2">
             <Input
               type="number"
