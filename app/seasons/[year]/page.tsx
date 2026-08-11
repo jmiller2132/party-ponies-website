@@ -129,7 +129,7 @@ async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: n
           </TableHeader>
           <TableBody>
             {standings.map((team: {
-              team_key: string; rank: number; owner_name: string; name: string;
+              team_key: string; rank: number; owner_name?: string; name: string;
               wins: number; losses: number; ties: number; points_for: number; points_against: number;
             }, index: number) => {
               const games = team.wins + team.losses + team.ties
