@@ -70,9 +70,6 @@ export const OWNER_NAME_MAPPINGS: OwnerNameMapping = {
   "--hidden-- (2016) [Fear Boners]": "Ben Simon",
   "--hidden-- (2016) [The Fighting ACL's]": "Jack Harvath",
   
-  // Fallback mapping (used if no year-specific mapping exists):
-  "--hidden--": "Unknown (Hidden Owner)",
-
   // "C Money" - 13 season(s): 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025
   //   Team names: C Money, Balls, Lamar Jackson, Mr. Big Tiddy, C $, Kareem Pies...
   "C Money": "Carter Van Ekeren", // TODO: Enter standardized name here
@@ -189,13 +186,12 @@ export function getStandardizedOwnerName(
       return yearOnlyMapping
     }
     
-    // Fall back to generic "--hidden--" mapping if no year-specific one exists
-    const genericMapping = OWNER_NAME_MAPPINGS["--hidden--"]
-    if (genericMapping) {
-      return genericMapping
+    // Fall back to team name (much friendlier than "Unknown (Hidden Owner)")
+    if (teamName) {
+      return teamName
     }
     
-    // If no mapping exists, return year-specific identifier
+    // Last resort
     return yearOnlyKey
   }
 
