@@ -163,7 +163,7 @@ async function StandingsTable() {
             {standings.map((team: {
               team_key: string
               rank: number
-              owner_name: string
+              owner_name?: string
               name: string
               wins: number
               losses: number
