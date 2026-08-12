@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { Card, CardContent } from "@/components/ui/card"
 
 export const metadata: Metadata = {
   title: "Manager Profiles",
@@ -40,13 +39,7 @@ export default async function ManagersPage() {
         </p>
       </div>
 
-      <Suspense fallback={
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">Loading managers...</p>
-          </CardContent>
-        </Card>
-      }>
+      <Suspense>
         <ManagersListWrapper />
       </Suspense>
     </div>

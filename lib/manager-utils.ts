@@ -5,8 +5,10 @@
 import { getAllLeaguesWithMetadata } from "./league-utils"
 import { getLeagueKeyForYear } from "./season-utils"
 import { fetchLeagueStandings } from "./yahoo-api"
+import { getCachedStandings } from "./cache"
 import { getSDSPlusScores } from "@/app/actions/yahoo-actions"
 import { getAllStandardizedNames } from "./owner-names"
+import { GAME_KEY_TO_YEAR } from "./yahoo-game-keys"
 
 export interface ManagerSeasonStats {
   year: number
@@ -156,14 +158,23 @@ export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
   const mostRecentSeasonYear = availableYears.length > 0 ? Math.max(...availableYears) : new Date().getFullYear()
   
   // Fetch ALL standings once (in parallel)
+  // Try Supabase cache first — avoids Yahoo API calls (which need auth tokens)
   const standingsPromises = leagues.map(async (league) => {
     const year = parseInt(league.season) || 0
     if (year === 0) return { league, year, standings: null }
-    
+
+    const gameKey = league.league_key.split('.')[0]
+    const season = GAME_KEY_TO_YEAR[gameKey] || String(year)
+
     try {
+      // Cache-first: fast path, no Yahoo token needed
+      const cached = await getCachedStandings(league.league_key, String(season))
+      if (cached) return { league, year, standings: cached }
+
+      // Cache miss: hit Yahoo API (requires valid tokens)
       const standings = await fetchLeagueStandings(league.league_key)
       return { league, year, standings }
-    } catch (error) {
+    } catch {
       return { league, year, standings: null }
     }
   })
