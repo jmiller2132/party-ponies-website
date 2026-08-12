@@ -102,7 +102,8 @@ async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: n
   const standings = result.data
     .sort((a: { rank: number }, b: { rank: number }) => a.rank - b.rank)
 
-  const playoffSpots = standings.length <= 10 ? 4 : 6
+  // Party Ponies runs a 6-team playoff regardless of league size
+  const playoffSpots = 6
 
   return (
     <Card>

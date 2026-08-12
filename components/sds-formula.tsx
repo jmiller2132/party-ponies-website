@@ -56,7 +56,7 @@ export function SDSFormula() {
                 </li>
                 <li>
                   <strong className="text-foreground">Season Result (0–30 pts):</strong>{' '}
-                  Champion +30 | Runner-up +18 | 3rd place +10 | 4th place +4 | Missed playoffs 0.
+                  Champion +30 | Runner-up +18 | 3rd +10 | 4th +4 | 5th–6th +2 | Missed playoffs 0.
                   Results matter — but they&apos;re additive, not multiplicative.
                 </li>
               </ul>

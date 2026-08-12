@@ -18,7 +18,7 @@
  *   Negative for teams whose record outpaced their dominance (got easy draws).
  *
  * PILLAR 4 — Season Result (0–30 pts)
- *   Champion: 30 | Runner-up: 18 | 3rd: 10 | 4th: 4 | Missed: 0
+ *   Champion: 30 | Runner-up: 18 | 3rd: 10 | 4th: 4 | 5th–6th: 2 | Missed: 0
  *   Playoff result matters — but no multipliers or hidden bonuses.
  *
  * Typical total range: ~30 (bad miss) to ~130 (all-time dominant champion).
@@ -143,11 +143,14 @@ export function calculatePPSI(
     const scheduleLuck = (apw - actualWinPct) * 15
 
     // Pillar 4: Season Result
+    // Party Ponies runs a 6-team playoff. Ranks 5–6 made the playoffs but
+    // were eliminated in round 1; they earn a small participation bonus.
     let seasonResult = 0
     if (team.rank === 1) seasonResult = 30
     else if (team.rank === 2) seasonResult = 18
     else if (team.rank === 3) seasonResult = 10
     else if (team.rank === 4) seasonResult = 4
+    else if (team.rank <= 6) seasonResult = 2
 
     const rawScore = dominance + scoring + scheduleLuck + seasonResult
     const score = Math.round(rawScore * 10) / 10
