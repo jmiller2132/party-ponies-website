@@ -1,408 +1,239 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Trophy } from "lucide-react"
 import { YahooStanding } from "@/lib/yahoo-api"
+import { cn } from "@/lib/utils"
 
 interface PlayoffBracketProps {
   standings: YahooStanding[]
   year: number
 }
 
+function teamLabel(team: YahooStanding | undefined) {
+  if (!team) return null
+  const name = team.owner_name || team.name
+  const showTeam = team.name && team.name !== name
+  return (
+    <span>
+      {name}
+      {showTeam && <span className="text-xs text-muted-foreground font-normal ml-1">({team.name})</span>}
+    </span>
+  )
+}
+
+function MatchupSlot({
+  seed,
+  team,
+  won,
+  bye,
+}: {
+  seed: number
+  team: YahooStanding | undefined
+  won: boolean
+  bye?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between p-3 rounded-lg border",
+        won ? "bg-green-500/10 border-green-500/40 font-semibold" : "bg-muted/40 border-border/60",
+        bye && "border-primary/30 bg-primary/5",
+      )}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-xs text-muted-foreground tabular-nums w-4 shrink-0">#{seed}</span>
+        <span className="text-sm truncate">{teamLabel(team)}</span>
+      </div>
+      {bye && (
+        <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-500 rounded shrink-0">Bye</span>
+      )}
+      {won && !bye && (
+        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded shrink-0">✓</span>
+      )}
+    </div>
+  )
+}
+
+function RoundLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{children}</p>
+  )
+}
+
+function VsDivider() {
+  return <p className="text-center text-xs text-muted-foreground">vs</p>
+}
+
 export function PlayoffBracketComponent({ standings, year }: PlayoffBracketProps) {
-  const isSixTeamPlayoff = year >= 2018
-  const playoffTeams = isSixTeamPlayoff ? standings.slice(0, 6) : standings.slice(0, 4)
+  const isSixTeam = year >= 2018
 
-  if (isSixTeamPlayoff && playoffTeams.length < 6) {
+  // Sort by final rank to get the playoff participants
+  const sorted = [...standings].sort((a, b) => a.rank - b.rank)
+  const playoffTeams = isSixTeam ? sorted.slice(0, 6) : sorted.slice(0, 4)
+
+  if ((isSixTeam && playoffTeams.length < 6) || (!isSixTeam && playoffTeams.length < 4)) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
-            Playoff Bracket
+            Playoff Bracket — {year} Season
           </CardTitle>
-          <CardDescription>Playoff bracket for the {year} season</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            Playoff bracket requires at least 6 teams. Currently {playoffTeams.length} teams available.
-          </p>
+          <p className="text-muted-foreground text-sm">Not enough data to render the bracket.</p>
         </CardContent>
       </Card>
     )
   }
 
-  if (!isSixTeamPlayoff && playoffTeams.length < 4) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5" />
-            Playoff Bracket
-          </CardTitle>
-          <CardDescription>Playoff bracket for the {year} season</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Playoff bracket requires at least 4 teams. Currently {playoffTeams.length} teams available.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
+  // Seed by regular season performance (wins → PF tiebreak)
+  const byRegSeason = [...playoffTeams].sort((a, b) =>
+    b.wins !== a.wins ? b.wins - a.wins : b.points_for - a.points_for
+  )
 
-  const getTeamDisplay = (team: YahooStanding | undefined) => {
-    if (!team) return null
-    return (
-      <>
-        {team.owner_name || team.name}
-        {team.owner_name && team.name && team.owner_name !== team.name && (
-          <span className="text-xs text-muted-foreground font-normal ml-1">({team.name})</span>
-        )}
-      </>
-    )
-  }
+  const [s1, s2, s3, s4, s5, s6] = byRegSeason
 
-  // Determine winners based on final rank
-  const champion = playoffTeams.find(t => t.rank === 1)
-  const runnerUp = playoffTeams.find(t => t.rank === 2)
-  const thirdPlace = playoffTeams.find(t => t.rank === 3)
+  // Helper: lower final rank = better result = winner of their matchup
+  const winner = (a: YahooStanding | undefined, b: YahooStanding | undefined) =>
+    (a?.rank ?? 999) < (b?.rank ?? 999) ? a : b
+  const loser = (a: YahooStanding | undefined, b: YahooStanding | undefined) =>
+    (a?.rank ?? 999) > (b?.rank ?? 999) ? a : b
 
-  // Seeds based on regular season finish (NOT final rank!)
-  // Sort by regular season record: wins first, then points_for
-  const sortedByRegularSeason = [...playoffTeams].sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins
-    return b.points_for - a.points_for
-  })
+  const champion = sorted[0]  // rank 1
+  const runnerUp  = sorted[1] // rank 2
+  const third     = sorted[2] // rank 3
 
-  // Seeds based on regular season finish
-  const seed1 = sortedByRegularSeason[0] // Best regular season record = Seed 1
-  const seed2 = sortedByRegularSeason[1] // 2nd best regular season = Seed 2
-  const seed3 = sortedByRegularSeason[2] // 3rd best regular season = Seed 3
-  const seed4 = sortedByRegularSeason[3] // 4th best regular season = Seed 4
+  if (isSixTeam) {
+    // QF: seed4 vs seed5, seed3 vs seed6
+    const qf45Winner = winner(s4, s5)
+    const qf45Loser  = loser(s4, s5)
+    const qf36Winner = winner(s3, s6)
+    const qf36Loser  = loser(s3, s6)
 
-  if (isSixTeamPlayoff) {
-    // 6-team bracket structure (2018+):
-    // Round 1 (Quarterfinals): 3 vs 6, 4 vs 5 (top 2 seeds get byes)
-    // Round 2 (Semifinals): 1 vs (4/5 winner), 2 vs (3/6 winner)
-    // Round 3 (Final): Semifinal winners
-    // 3rd Place Game: Semifinal losers
-
-    const seed5 = playoffTeams[4] // 5th in standings = Seed 5
-    const seed6 = playoffTeams[5] // 6th in standings = Seed 6
-
-    // Determine quarterfinal winners based on final ranks
-    const qf1Winner = (runnerUp && (runnerUp.team_key === seed4?.team_key || runnerUp.team_key === seed5?.team_key)) 
-      ? runnerUp 
-      : (thirdPlace && (thirdPlace.team_key === seed4?.team_key || thirdPlace.team_key === seed5?.team_key))
-      ? thirdPlace
-      : seed4
-    
-    const qf2Winner = (runnerUp && (runnerUp.team_key === seed3?.team_key || runnerUp.team_key === seed6?.team_key))
-      ? runnerUp
-      : (thirdPlace && (thirdPlace.team_key === seed3?.team_key || thirdPlace.team_key === seed6?.team_key))
-      ? thirdPlace
-      : seed3
-
-    // Semifinal winners
-    const semifinal1Winner = champion // Champion won semifinal 1
-    const semifinal2Winner = runnerUp // Runner-up won semifinal 2
-
-    // Determine 3rd place game participants (semifinal losers)
-    const semifinal1Loser = semifinal1Winner?.team_key === seed1?.team_key ? qf1Winner : seed1
-    const semifinal2Loser = semifinal2Winner?.team_key === seed2?.team_key ? qf2Winner : seed2
+    // SF: seed1 plays QF(3v6) winner, seed2 plays QF(4v5) winner
+    const sf1Winner = winner(s1, qf36Winner)
+    const sf1Loser  = loser(s1, qf36Winner)
+    const sf2Winner = winner(s2, qf45Winner)
+    const sf2Loser  = loser(s2, qf45Winner)
 
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
-            Playoff Bracket - {year} Season
+            Playoff Bracket — {year} Season
           </CardTitle>
-          <CardDescription>6-team playoff bracket with top 2 seeds receiving byes</CardDescription>
+          <CardDescription>6-team playoff · top 2 seeds received first-round byes</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {/* Round 1: Quarterfinals */}
-            <div>
-              <h4 className="font-semibold text-sm text-muted-foreground mb-3">Quarterfinals</h4>
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Matchup 1: Seed 3 vs Seed 6 */}
-                <div className="space-y-2">
-                  <div className={`p-3 border rounded-lg ${qf2Winner?.team_key === seed3?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">
-                        #{3} {getTeamDisplay(seed3)}
-                      </span>
-                      {qf2Winner?.team_key === seed3?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Winner</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${qf2Winner?.team_key === seed6?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">
-                        #{6} {getTeamDisplay(seed6)}
-                      </span>
-                      {qf2Winner?.team_key === seed6?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Winner</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Column 1: Quarterfinals */}
+            <div className="space-y-4">
+              <RoundLabel>Quarterfinals</RoundLabel>
 
-                {/* Matchup 2: Seed 4 vs Seed 5 */}
-                <div className="space-y-2">
-                  <div className={`p-3 border rounded-lg ${qf1Winner?.team_key === seed4?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">
-                        #{4} {getTeamDisplay(seed4)}
-                      </span>
-                      {qf1Winner?.team_key === seed4?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Winner</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${qf1Winner?.team_key === seed5?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">
-                        #{5} {getTeamDisplay(seed5)}
-                      </span>
-                      {qf1Winner?.team_key === seed5?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Winner</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {/* Seed 1 bye */}
+              <div className="space-y-1">
+                <MatchupSlot seed={1} team={s1} won={false} bye />
+              </div>
+
+              {/* 4 vs 5 */}
+              <div className="space-y-1">
+                <MatchupSlot seed={4} team={s4} won={qf45Winner?.team_key === s4?.team_key} />
+                <VsDivider />
+                <MatchupSlot seed={5} team={s5} won={qf45Winner?.team_key === s5?.team_key} />
+              </div>
+
+              {/* 3 vs 6 */}
+              <div className="space-y-1">
+                <MatchupSlot seed={3} team={s3} won={qf36Winner?.team_key === s3?.team_key} />
+                <VsDivider />
+                <MatchupSlot seed={6} team={s6} won={qf36Winner?.team_key === s6?.team_key} />
+              </div>
+
+              {/* Seed 2 bye */}
+              <div className="space-y-1">
+                <MatchupSlot seed={2} team={s2} won={false} bye />
               </div>
             </div>
 
-            {/* Round 2: Semifinals */}
-            <div>
-              <h4 className="font-semibold text-sm text-muted-foreground mb-3">Semifinals</h4>
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Semifinal 1: Seed 1 vs Quarterfinal Winner (4/5) */}
-                <div className="space-y-2">
-                  <div className={`p-3 border-2 rounded-lg ${semifinal1Winner?.team_key === seed1?.team_key ? 'border-green-500/50 bg-green-500/10' : 'border-primary/30 bg-primary/5'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        #{1} {getTeamDisplay(seed1)}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-600 rounded">Bye</span>
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${semifinal1Winner?.team_key === qf1Winner?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">
-                        {getTeamDisplay(qf1Winner)}
-                      </span>
-                      {semifinal1Winner?.team_key === qf1Winner?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+            {/* Column 2: Semifinals */}
+            <div className="space-y-4">
+              <RoundLabel>Semifinals</RoundLabel>
 
-                {/* Semifinal 2: Seed 2 vs Quarterfinal Winner (3/6) */}
-                <div className="space-y-2">
-                  <div className={`p-3 border-2 rounded-lg ${semifinal2Winner?.team_key === seed2?.team_key ? 'border-green-500/50 bg-green-500/10' : 'border-primary/30 bg-primary/5'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        #{2} {getTeamDisplay(seed2)}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-600 rounded">Bye</span>
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${semifinal2Winner?.team_key === qf2Winner?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">
-                        {getTeamDisplay(qf2Winner)}
-                      </span>
-                      {semifinal2Winner?.team_key === qf2Winner?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {/* SF1: seed1 vs qf36Winner */}
+              <div className="space-y-1">
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(s1) + 1}
+                  team={s1}
+                  won={sf1Winner?.team_key === s1?.team_key}
+                />
+                <VsDivider />
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(qf36Winner!) + 1}
+                  team={qf36Winner}
+                  won={sf1Winner?.team_key === qf36Winner?.team_key}
+                />
+              </div>
+
+              {/* SF2: seed2 vs qf45Winner */}
+              <div className="space-y-1 mt-6">
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(s2) + 1}
+                  team={s2}
+                  won={sf2Winner?.team_key === s2?.team_key}
+                />
+                <VsDivider />
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(qf45Winner!) + 1}
+                  team={qf45Winner}
+                  won={sf2Winner?.team_key === qf45Winner?.team_key}
+                />
               </div>
             </div>
 
-            {/* Round 3: Final */}
-            <div className="pt-4 border-t">
-              <h4 className="font-semibold text-sm text-muted-foreground mb-3">Final</h4>
-              <div className="p-4 border-2 border-yellow-500/50 bg-yellow-500/5 rounded-lg">
+            {/* Column 3: Final + 3rd/5th */}
+            <div className="space-y-4">
+              <RoundLabel>Final</RoundLabel>
+              <div className="p-4 border-2 border-yellow-500/40 bg-yellow-500/5 rounded-lg space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-lg">
-                      {getTeamDisplay(champion)}
-                    </span>
-                    {champion && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        Record: {champion.wins}-{champion.losses}
-                        {champion.ties > 0 && `-${champion.ties}`}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs px-3 py-1 bg-yellow-500/20 text-yellow-600 rounded-full font-semibold">
+                  <span className="font-bold">{teamLabel(champion)}</span>
+                  <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-600 rounded-full font-semibold shrink-0">
                     🏆 Champion
                   </span>
                 </div>
-                {runnerUp && (
-                  <div className="mt-3 pt-3 border-t border-yellow-500/20">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Runner-Up: {getTeamDisplay(runnerUp)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Record: {runnerUp.wins}-{runnerUp.losses}
-                        {runnerUp.ties > 0 && `-${runnerUp.ties}`}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 3rd Place Game */}
-            {thirdPlace && (
-              <div className="pt-4 border-t">
-                <h4 className="font-semibold text-sm text-muted-foreground mb-3">3rd Place Game</h4>
-                <div className="p-4 border rounded-lg bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">
-                      {getTeamDisplay(thirdPlace)}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-amber-500/20 text-amber-600 rounded-full font-semibold">
-                      3rd Place
-                    </span>
-                  </div>
-                  {semifinal1Loser && semifinal2Loser && (
-                    <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>{getTeamDisplay(semifinal1Loser)}</span>
-                        <span>vs</span>
-                        <span>{getTeamDisplay(semifinal2Loser)}</span>
-                      </div>
-                    </div>
-                  )}
+                <div className="pt-2 border-t border-yellow-500/20 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>Runner-up: {teamLabel(runnerUp)}</span>
                 </div>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    )
-  } else {
-    // 4-team bracket structure (pre-2018):
-    // Round 1 (Semifinals): 1 vs 4, 2 vs 3
-    // Round 2 (Final): Semifinal winners
 
-    // Determine semifinal winners
-    const semifinal1Winner = champion // Champion won semifinal 1
-    const semifinal2Winner = runnerUp // Runner-up won semifinal 2
-
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5" />
-            Playoff Bracket - {year} Season
-          </CardTitle>
-          <CardDescription>4-team playoff bracket</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {/* Round 1: Semifinals */}
-            <div>
-              <h4 className="font-semibold text-sm text-muted-foreground mb-3">Semifinals</h4>
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Semifinal 1: Seed 1 vs Seed 4 */}
-                <div className="space-y-2">
-                  <div className={`p-3 border rounded-lg ${semifinal1Winner?.team_key === seed1?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        #{1} {getTeamDisplay(seed1)}
-                      </span>
-                      {semifinal1Winner?.team_key === seed1?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${semifinal1Winner?.team_key === seed4?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">
-                        #{4} {getTeamDisplay(seed4)}
-                      </span>
-                      {semifinal1Winner?.team_key === seed4?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Semifinal 2: Seed 2 vs Seed 3 */}
-                <div className="space-y-2">
-                  <div className={`p-3 border rounded-lg ${semifinal2Winner?.team_key === seed2?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        #{2} {getTeamDisplay(seed2)}
-                      </span>
-                      {semifinal2Winner?.team_key === seed2?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">vs</div>
-                  <div className={`p-3 border rounded-lg ${semifinal2Winner?.team_key === seed3?.team_key ? 'bg-green-500/10 border-green-500/50' : 'bg-muted/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">
-                        #{3} {getTeamDisplay(seed3)}
-                      </span>
-                      {semifinal2Winner?.team_key === seed3?.team_key && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded font-semibold">✓ Advanced</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              <RoundLabel>3rd Place</RoundLabel>
+              <div className="space-y-1">
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(sf1Loser!) + 1}
+                  team={sf1Loser}
+                  won={third?.team_key === sf1Loser?.team_key}
+                />
+                <VsDivider />
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(sf2Loser!) + 1}
+                  team={sf2Loser}
+                  won={third?.team_key === sf2Loser?.team_key}
+                />
               </div>
-            </div>
 
-            {/* Round 2: Final */}
-            <div className="pt-4 border-t">
-              <h4 className="font-semibold text-sm text-muted-foreground mb-3">Final</h4>
-              <div className="p-4 border-2 border-yellow-500/50 bg-yellow-500/5 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-lg">
-                      {getTeamDisplay(champion)}
-                    </span>
-                    {champion && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        Record: {champion.wins}-{champion.losses}
-                        {champion.ties > 0 && `-${champion.ties}`}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs px-3 py-1 bg-yellow-500/20 text-yellow-600 rounded-full font-semibold">
-                    🏆 Champion
-                  </span>
-                </div>
-                {runnerUp && (
-                  <div className="mt-3 pt-3 border-t border-yellow-500/20">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Runner-Up: {getTeamDisplay(runnerUp)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Record: {runnerUp.wins}-{runnerUp.losses}
-                        {runnerUp.ties > 0 && `-${runnerUp.ties}`}
-                      </span>
-                    </div>
-                  </div>
-                )}
+              <RoundLabel>5th Place</RoundLabel>
+              <div className="space-y-1">
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(qf36Loser!) + 1}
+                  team={qf36Loser}
+                  won={(qf36Loser?.rank ?? 999) < (qf45Loser?.rank ?? 999)}
+                />
+                <VsDivider />
+                <MatchupSlot
+                  seed={byRegSeason.indexOf(qf45Loser!) + 1}
+                  team={qf45Loser}
+                  won={(qf45Loser?.rank ?? 999) < (qf36Loser?.rank ?? 999)}
+                />
               </div>
             </div>
           </div>
@@ -410,4 +241,57 @@ export function PlayoffBracketComponent({ standings, year }: PlayoffBracketProps
       </Card>
     )
   }
+
+  // ── 4-team bracket (pre-2018) ──────────────────────────────────────────────
+  // SF1: seed1 vs seed4, SF2: seed2 vs seed3
+  const sf1Winner4 = winner(s1, s4)
+  const sf2Winner4 = winner(s2, s3)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Trophy className="h-5 w-5" />
+          Playoff Bracket — {year} Season
+        </CardTitle>
+        <CardDescription>4-team playoff bracket</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Semifinals */}
+          <div className="space-y-4">
+            <RoundLabel>Semifinals</RoundLabel>
+
+            <div className="space-y-1">
+              <MatchupSlot seed={1} team={s1} won={sf1Winner4?.team_key === s1?.team_key} />
+              <VsDivider />
+              <MatchupSlot seed={4} team={s4} won={sf1Winner4?.team_key === s4?.team_key} />
+            </div>
+
+            <div className="space-y-1">
+              <MatchupSlot seed={2} team={s2} won={sf2Winner4?.team_key === s2?.team_key} />
+              <VsDivider />
+              <MatchupSlot seed={3} team={s3} won={sf2Winner4?.team_key === s3?.team_key} />
+            </div>
+          </div>
+
+          {/* Final */}
+          <div className="space-y-4">
+            <RoundLabel>Final</RoundLabel>
+            <div className="p-4 border-2 border-yellow-500/40 bg-yellow-500/5 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold">{teamLabel(champion)}</span>
+                <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-600 rounded-full font-semibold shrink-0">
+                  🏆 Champion
+                </span>
+              </div>
+              <div className="pt-2 border-t border-yellow-500/20 text-sm text-muted-foreground">
+                Runner-up: {teamLabel(runnerUp)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }

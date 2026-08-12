@@ -338,10 +338,10 @@ async function WeeklyScoresBreakdown({ leagueKey, year }: { leagueKey: string; y
 
 // ─── Playoff Bracket ──────────────────────────────────────────────────────────
 
-async function PlayoffBracket({ leagueKey }: { leagueKey: string }) {
+async function PlayoffBracket({ leagueKey, year }: { leagueKey: string; year: number }) {
   const result = await getLeagueStandings(leagueKey)
   if (!result.success || !result.data?.length) return null
-  return <PlayoffBracketComponent standings={result.data} year={0} />
+  return <PlayoffBracketComponent standings={result.data} year={year} />
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -444,7 +444,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
       {/* 5. Playoff Bracket */}
       <Suspense fallback={<SectionSkeleton rows={4} />}>
-        <PlayoffBracket leagueKey={leagueKey} />
+        <PlayoffBracket leagueKey={leagueKey} year={year} />
       </Suspense>
     </div>
   )
