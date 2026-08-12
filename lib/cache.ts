@@ -86,19 +86,27 @@ export async function getCachedStandings(leagueKey: string, season: string): Pro
     // Check if owner_name column exists and is populated
     // If owner_name is missing, NULL, or undefined for any row, invalidate cache to force fresh fetch
     const hasMissingOwnerNames = data.some(row => {
-      // Check if owner_name column doesn't exist (undefined) or is NULL/empty
-      // Note: We don't check if owner_name === team_name because they might legitimately be the same
       return row.owner_name === undefined || row.owner_name === null || row.owner_name === ''
     })
     
     if (hasMissingOwnerNames) {
-      // Cache exists but missing owner_name - invalidate to force fresh fetch with owner names
       console.log(`[Cache] Invalidating cache for ${leagueKey} - missing owner_name`)
       return null
     }
+
+    // Deduplicate by team_key — the DB can accumulate duplicate rows if the delete
+    // in cacheStandings fails (e.g. anon key blocked by RLS). Keep the row with the
+    // lowest rank value (i.e. best finish), which is also the first one returned
+    // since we ordered by rank ascending.
+    const seen = new Set<string>()
+    const deduped = data.filter(row => {
+      if (seen.has(row.team_key)) return false
+      seen.add(row.team_key)
+      return true
+    })
     
     // Transform database rows to YahooStanding format
-    return data.map(row => ({
+    return deduped.map(row => ({
       team_key: row.team_key,
       name: row.team_name,
       owner_name: row.owner_name || row.team_name, // Use cached owner_name, fallback to team_name
@@ -122,22 +130,28 @@ export async function cacheStandings(leagueKey: string, season: string, standing
   const supabase = createServerSupabaseClient()
   
   try {
-    // Delete old cached standings for this league/season
-    await supabase
+    // Delete old rows first. Requires the service role key; if it fails (e.g. anon
+    // key blocked by RLS) we skip the insert to avoid creating duplicate rows.
+    // getCachedStandings also deduplicates on read as a safety net.
+    const { error: deleteError } = await supabase
       .from('league_standings')
       .delete()
       .eq('league_key', leagueKey)
       .eq('season', season)
       .is('week', null)
-    
-    // Insert new standings
+
+    if (deleteError) {
+      console.warn('[Cache] Could not delete old standings, skipping insert to avoid dupes:', deleteError.message)
+      return
+    }
+
     const rows = standings.map(team => ({
       league_key: leagueKey,
       season: season,
-      week: null, // Final standings
+      week: null,
       team_key: team.team_key,
       team_name: team.name,
-      owner_name: team.owner_name || team.name, // Store owner name
+      owner_name: team.owner_name || team.name,
       rank: team.rank,
       wins: team.wins || 0,
       losses: team.losses || 0,
@@ -145,7 +159,7 @@ export async function cacheStandings(leagueKey: string, season: string, standing
       points_for: team.points_for,
       points_against: team.points_against,
     }))
-    
+
     await supabase
       .from('league_standings')
       .insert(rows)

@@ -41,6 +41,14 @@ CREATE INDEX IF NOT EXISTS idx_league_standings_season ON league_standings(seaso
 CREATE INDEX IF NOT EXISTS idx_league_standings_team_key ON league_standings(team_key);
 CREATE INDEX IF NOT EXISTS idx_league_standings_owner_name ON league_standings(owner_name);
 
+-- Partial unique index for final standings (week IS NULL).
+-- The table's UNIQUE(league_key, season, week, team_key) constraint doesn't prevent
+-- duplicates when week is NULL because PostgreSQL treats NULL != NULL in unique checks.
+-- This partial index plugs that gap.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_league_standings_final_unique
+  ON league_standings(league_key, season, team_key)
+  WHERE week IS NULL;
+
 -- Table to store historical matchups
 CREATE TABLE IF NOT EXISTS matchups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
