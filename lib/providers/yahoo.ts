@@ -44,6 +44,7 @@ export default function Yahoo<P extends YahooProfile>(
     token: "https://api.login.yahoo.com/oauth2/get_token",
     userinfo: "https://api.login.yahoo.com/openid/v1/userinfo",
     checks: ["state"],
+    idToken: false,
     profile(profile: unknown) {
       const p = profile as Record<string, unknown>
       const sub = (p?.sub ?? p?.id) as string | undefined
