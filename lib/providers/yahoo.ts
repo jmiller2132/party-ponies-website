@@ -28,10 +28,7 @@ export default function Yahoo<P extends YahooProfile>(
   return {
     id: "yahoo",
     name: "Yahoo",
-    type: "oidc" as unknown as "oauth",
-    // Use OIDC mode so openid-client uses client.callback() which handles
-    // Yahoo's id_token (ES256). wellKnown provides the JWKS for ES256 validation.
-    wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
+    type: "oauth" as const,
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
@@ -40,10 +37,33 @@ export default function Yahoo<P extends YahooProfile>(
         redirect_uri: redirectUri,
       },
     },
-    token: "https://api.login.yahoo.com/oauth2/get_token",
+    // Custom token request: manually exchange the code and strip id_token
+    // so openid-client never tries to validate Yahoo's ES256 id_token.
+    token: {
+      url: "https://api.login.yahoo.com/oauth2/get_token",
+      async request({ provider, params }: { provider: any; params: any }) {
+        const credentials = Buffer.from(
+          `${provider.clientId}:${provider.clientSecret}`
+        ).toString("base64")
+        const response = await fetch("https://api.login.yahoo.com/oauth2/get_token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Authorization: `Basic ${credentials}`,
+          },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code: params.code,
+            redirect_uri: provider.callbackUrl,
+          }),
+        })
+        const tokens = await response.json()
+        delete tokens.id_token // strip ES256 id_token — keeps oauthCallback flow happy
+        return { tokens }
+      },
+    },
     userinfo: "https://api.login.yahoo.com/openid/v1/userinfo",
     checks: ["state"],
-    idToken: false,
     profile(profile: unknown) {
       const p = profile as Record<string, unknown>
       const sub = (p?.sub ?? p?.id) as string | undefined
