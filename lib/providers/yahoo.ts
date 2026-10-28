@@ -28,7 +28,7 @@ export default function Yahoo<P extends YahooProfile>(
   return {
     id: "yahoo",
     name: "Yahoo",
-    type: "oidc" as const,
+    type: "oidc" as unknown as "oauth",
     // Use OIDC mode so openid-client uses client.callback() which handles
     // Yahoo's id_token (ES256). wellKnown provides the JWKS for ES256 validation.
     wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
