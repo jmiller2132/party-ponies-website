@@ -111,10 +111,11 @@ export async function getAllWeeklyScores(leagueKey: string) {
 
 /**
  * Server Action to calculate PPSI for a season.
- * Uses cached data from Supabase when available, otherwise calculates and caches.
- * For comparison page, skipWeeklyScores=true improves performance.
+ * Always uses full weekly matchup data for accurate all-play win%.
+ * Results are cached in Supabase so the compare page reuses the same
+ * accurate numbers as the individual season page.
  */
-export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: boolean = false) {
+export async function getSDSPlusScores(leagueKey: string, _skipWeeklyScores: boolean = false) {
   try {
     // Get season from league key (try leagues first, fallback to parsing)
     let season: string
@@ -126,40 +127,35 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
       const gameKey = leagueKey.split('.')[0]
       season = GAME_KEY_TO_YEAR[gameKey] || new Date().getFullYear().toString()
     }
-    
-    // Check cache first (only if skipping weekly scores - cached scores don't have full breakdown)
-    if (skipWeeklyScores) {
-      const cachedScores = await getCachedSDSPlus(leagueKey, season)
-      if (cachedScores) {
-        // Merge standings data (W-L-T, PF, PA) into cached scores
-        const standingsResult = await getLeagueStandings(leagueKey)
-        if (standingsResult.success && standingsResult.data) {
-          const scoresWithStats = cachedScores.map(score => {
-            const standing = standingsResult.data.find(s => s.team_key === score.team_key)
-            if (!standing) return score
-            
-            return {
-              ...score,
-              wins: standing.wins ?? 0,
-              losses: standing.losses ?? 0,
-              ties: standing.ties ?? 0,
-              points_for: standing.points_for ?? 0,
-              points_against: standing.points_against ?? 0,
-            }
-          })
-          return { success: true, data: scoresWithStats }
-        }
-        return { success: true, data: cachedScores }
+
+    // Always check cache first — accurate scores are written here after every full calculation
+    const cachedScores = await getCachedSDSPlus(leagueKey, season)
+    if (cachedScores) {
+      // Merge fresh standings data (W-L-T, PF, PA) into cached scores
+      const standingsResult = await getLeagueStandings(leagueKey)
+      if (standingsResult.success && standingsResult.data) {
+        const scoresWithStats = cachedScores.map(score => {
+          const standing = standingsResult.data.find(s => s.team_key === score.team_key)
+          if (!standing) return score
+          return {
+            ...score,
+            wins: standing.wins ?? 0,
+            losses: standing.losses ?? 0,
+            ties: standing.ties ?? 0,
+            points_for: standing.points_for ?? 0,
+            points_against: standing.points_against ?? 0,
+          }
+        })
+        return { success: true, data: scoresWithStats }
       }
+      return { success: true, data: cachedScores }
     }
-    
-    // Cache miss - fetch standings first (always needed)
-    const standingsResult = await getLeagueStandings(leagueKey)
-    
-    // Only fetch weekly scores if not skipped (for comparison performance)
-    const weeklyScoresResult = skipWeeklyScores 
-      ? { success: true, data: [] }
-      : await getAllWeeklyScores(leagueKey)
+
+    // Cache miss — fetch standings and full weekly scores
+    const [standingsResult, weeklyScoresResult] = await Promise.all([
+      getLeagueStandings(leagueKey),
+      getAllWeeklyScores(leagueKey),
+    ])
 
     if (!standingsResult.success || !standingsResult.data) {
       return {
@@ -169,20 +165,19 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
     }
 
     const weeklyScores = (weeklyScoresResult.success ? weeklyScoresResult.data : undefined) ?? []
-    
+
     // Determine regular season weeks
-    const maxWeek = weeklyScores.length > 0 
+    const maxWeek = weeklyScores.length > 0
       ? Math.max(...weeklyScores.map(ws => ws.week))
       : 14
     const regularSeasonWeeks = Math.min(maxWeek, 14)
 
     const scores = calculatePPSI(standingsResult.data, weeklyScores, regularSeasonWeeks)
-    
+
     // Merge standings data (W-L-T, PF, PA) into scores
     const scoresWithStats = scores.map(score => {
       const standing = standingsResult.data.find(s => s.team_key === score.team_key)
       if (!standing) return score
-      
       return {
         ...score,
         wins: standing.wins ?? 0,
@@ -193,10 +188,8 @@ export async function getSDSPlusScores(leagueKey: string, skipWeeklyScores: bool
       }
     })
 
-    // Cache the results for future requests (only if skipping weekly scores for performance)
-    if (skipWeeklyScores) {
-      await cacheSDSPlus(leagueKey, season, scoresWithStats)
-    }
+    // Cache accurate results so both season and compare pages agree
+    await cacheSDSPlus(leagueKey, season, scoresWithStats)
 
     return { success: true, data: scoresWithStats }
   } catch (error) {
