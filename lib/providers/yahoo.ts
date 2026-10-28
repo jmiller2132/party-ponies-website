@@ -28,13 +28,11 @@ export default function Yahoo<P extends YahooProfile>(
   return {
     id: "yahoo",
     name: "Yahoo",
-    type: "oauth" as const,
-    // Plain OAuth 2.0 — no wellKnown/OIDC discovery.
-    // wellKnown triggers ID token + nonce verification which Yahoo's flow
-    // doesn't satisfy cleanly in NextAuth v4, causing OAuthCallback errors.
-    // All endpoints are explicit so we don't need discovery.
+    type: "oidc" as const,
+    // Use OIDC mode so openid-client uses client.callback() which handles
+    // Yahoo's id_token (ES256). wellKnown provides the JWKS for ES256 validation.
+    wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
     authorization: {
-      url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
         scope: "openid fspt-r",
         response_type: "code",
