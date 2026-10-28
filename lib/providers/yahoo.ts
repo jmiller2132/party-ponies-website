@@ -14,7 +14,8 @@ export interface YahooProfile {
  */
 export default function Yahoo<P extends YahooProfile>(
   options: OAuthUserConfig<P>
-): OAuthConfig<P> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
   // Yahoo requires https redirect_uri; never send http (especially for localhost)
   let baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "") || "https://localhost:3000"
   if (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.0.0.1")) {
