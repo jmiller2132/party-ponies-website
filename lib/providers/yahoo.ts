@@ -33,6 +33,7 @@ export default function Yahoo<P extends YahooProfile>(
     // Yahoo's id_token (ES256). wellKnown provides the JWKS for ES256 validation.
     wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
     authorization: {
+      url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
         scope: "openid fspt-r",
         response_type: "code",
