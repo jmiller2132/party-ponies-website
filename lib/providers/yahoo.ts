@@ -25,7 +25,7 @@ export default function Yahoo<P extends YahooProfile>(
   return {
     id: "yahoo",
     name: "Yahoo",
-    type: "oidc",
+    type: "oauth",
     wellKnown: "https://api.login.yahoo.com/.well-known/openid-configuration",
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
