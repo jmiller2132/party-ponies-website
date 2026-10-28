@@ -9,9 +9,8 @@ export interface YahooProfile {
 
 /**
  * Yahoo OAuth provider for Fantasy Sports.
- * Uses OIDC mode with wellKnown so openid-client auto-fetches Yahoo's JWKS
- * and correctly validates the ES256 id_token Yahoo always returns.
- * checks: ["state"] skips nonce to avoid nonce mismatch errors.
+ * Yahoo always returns an ES256-signed id_token, so this uses the OIDC callback
+ * path (idToken: true) with wellKnown supplying Yahoo's JWKS.
  */
 export default function Yahoo<P extends YahooProfile>(
   options: OAuthUserConfig<P>
@@ -37,7 +36,11 @@ export default function Yahoo<P extends YahooProfile>(
     },
     token: "https://api.login.yahoo.com/oauth2/get_token",
     userinfo: "https://api.login.yahoo.com/openid/v1/userinfo",
-    checks: ["state"],
+    // openid-client defaults to RS256; Yahoo signs id_tokens with ES256.
+    client: {
+      id_token_signed_response_alg: "ES256",
+    },
+    checks: ["state", "nonce"],
     idToken: true,
     profile(profile: unknown) {
       const p = profile as Record<string, unknown>
