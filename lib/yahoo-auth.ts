@@ -80,12 +80,18 @@ export async function getValidYahooToken(userId?: string) {
     }
     tokens = data
   } else {
-    // Get first available token (commissioner's token for public access)
-    const { data, error } = await supabase
-      .from('yahoo_tokens')
-      .select('*')
-      .limit(1)
-      .single()
+    // Commissioner's token for public access. Only the admin's Yahoo account
+    // (YAHOO_ADMIN_USER_ID) is used, so other managers signing in can't change
+    // which account fetches league data. If unset, use the most recent sign-in.
+    const adminId = process.env.YAHOO_ADMIN_USER_ID
+    let query = supabase.from('yahoo_tokens').select('*')
+    if (adminId) {
+      query = query.eq('user_id', adminId)
+    } else {
+      console.warn('[yahoo-auth] YAHOO_ADMIN_USER_ID not set; using most recently updated token')
+      query = query.order('updated_at', { ascending: false })
+    }
+    const { data, error } = await query.limit(1).single()
     
     if (error || !data) {
       throw new Error('No tokens found in database. Please authenticate once to store tokens.')

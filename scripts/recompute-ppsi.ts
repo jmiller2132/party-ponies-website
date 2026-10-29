@@ -103,11 +103,13 @@ async function getValidToken(): Promise<string> {
   }
 
   // Fetch from DB
-  const { data, error } = await supabase
+  const adminId = process.env.YAHOO_ADMIN_USER_ID
+  let query = supabase
     .from('yahoo_tokens')
     .select('user_id, access_token, refresh_token, expires_at')
-    .limit(1)
-    .single()
+  query = adminId ? query.eq('user_id', adminId) : query.order('updated_at', { ascending: false })
+  const { data, error } = await query.limit(1).single()
+  if (data) console.log(`  Using Yahoo token for user ${data.user_id}${adminId ? ' (admin)' : ' (most recent sign-in)'}`)
 
   if (error || !data) {
     throw new Error(
