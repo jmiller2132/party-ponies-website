@@ -95,10 +95,10 @@ function standardizeName(raw: string, year: string, teamName?: string): string {
 // ── Yahoo OAuth helpers ───────────────────────────────────────────────────────
 let _cachedToken: { access_token: string; expires_at: number; user_id: string } | null = null
 
-async function getValidToken(): Promise<string> {
+async function getValidToken(forceRefresh = false): Promise<string> {
   const fiveMins = Date.now() + 5 * 60 * 1000
 
-  if (_cachedToken && _cachedToken.expires_at > fiveMins) {
+  if (!forceRefresh && _cachedToken && _cachedToken.expires_at > fiveMins) {
     return _cachedToken.access_token
   }
 
@@ -120,8 +120,8 @@ async function getValidToken(): Promise<string> {
   }
 
   // Refresh if expiring soon
-  if (data.expires_at < fiveMins) {
-    console.log('  Refreshing Yahoo token...')
+  if (forceRefresh || !data.expires_at || data.expires_at < fiveMins) {
+    console.log(`  Refreshing Yahoo token${forceRefresh ? ' (Yahoo reported it expired)' : ''}...`)
     const resp = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
       method: 'POST',
       headers: {
@@ -163,13 +163,15 @@ async function getValidToken(): Promise<string> {
 }
 
 async function yahooFetch(path: string): Promise<any> {
-  const token = await getValidToken()
   const base = 'https://fantasysports.yahooapis.com/fantasy/v2'
   const url = `${base}${path}`
+  const doFetch = (t: string) => fetch(url, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } })
 
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  })
+  let resp = await doFetch(await getValidToken())
+  // The stored expires_at can be wrong; if Yahoo says the token expired, refresh once and retry
+  if (resp.status === 401) {
+    resp = await doFetch(await getValidToken(true))
+  }
 
   if (!resp.ok) {
     const txt = await resp.text()
@@ -1002,8 +1004,8 @@ async function main() {
         const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${YAHOO_CLIENT_ID}&redirect_uri=${encodeURIComponent('https://localhost:3000/api/auth/yahoo/callback')}&response_type=code&scope=fspt-r`
         console.warn(`    ${authUrl}`)
       }
-    } catch {
-      console.log('  Token OK. (could not fetch user profile — non-fatal)')
+    } catch (e: any) {
+      console.log(`  Could not fetch Yahoo user profile (non-fatal): ${String(e.message).slice(0, 160)}`)
     }
     console.log('')
   } catch (e: any) {
