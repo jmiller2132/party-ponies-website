@@ -20,11 +20,30 @@
 
 import { createServerSupabaseClient } from './supabase'
 import { YahooStanding } from './yahoo-api'
-import { SDSPlusScore } from './sds-plus'
+import { LeagueSettings } from './yahoo-api'
+import { PPSIScore, SDSPlusScore } from './sds-plus'
 import { HeadToHeadRecord } from './manager-utils'
 
 const CURRENT_SEASON_WEEKLY_TTL_HOURS = 168 // Current season: refresh weekly (7 days)
 const CURRENT_SEASON_YEAR = new Date().getFullYear()
+
+/**
+ * Guard: return true only if leagueKey is in NEXT_PUBLIC_ALLOWED_LEAGUE_KEYS.
+ * FAILS CLOSED: if the env var is unset, we refuse ALL writes and log an error.
+ * This prevents stray leagues (e.g. the token holder's other Yahoo leagues) from
+ * ever being written to any cache table.
+ */
+function isAllowedLeagueKey(leagueKey: string): boolean {
+  const allowed = process.env.NEXT_PUBLIC_ALLOWED_LEAGUE_KEYS
+  if (!allowed) {
+    console.error(
+      '[cache] NEXT_PUBLIC_ALLOWED_LEAGUE_KEYS is not set — refusing all cache writes to prevent stray data. ' +
+      'Set this env var to the comma-separated list of allowed league keys.'
+    )
+    return false
+  }
+  return allowed.split(',').map(k => k.trim()).includes(leagueKey)
+}
 
 /**
  * Check if cached data is still fresh
@@ -127,6 +146,10 @@ export async function getCachedStandings(leagueKey: string, season: string): Pro
  * Cache standings for a league
  */
 export async function cacheStandings(leagueKey: string, season: string, standings: YahooStanding[]): Promise<void> {
+  if (!isAllowedLeagueKey(leagueKey)) {
+    console.warn(`[cache] cacheStandings: blocked non-allowed league key "${leagueKey}"`)
+    return
+  }
   const supabase = createServerSupabaseClient()
   
   try {
@@ -170,12 +193,17 @@ export async function cacheStandings(leagueKey: string, season: string, standing
 }
 
 /**
- * Get cached SDS+ scores for a league
+ * Get cached SDS+ scores for a league.
+ *
+ * Returns null (forces recompute) if:
+ *  - no rows found
+ *  - cache is stale
+ *  - formula_version is not 'v2' (old v1 rows need recomputing)
  */
-export async function getCachedSDSPlus(leagueKey: string, season: string): Promise<SDSPlusScore[] | null> {
+export async function getCachedSDSPlus(leagueKey: string, season: string): Promise<PPSIScore[] | null> {
   const supabase = createServerSupabaseClient()
   const isCurrentSeason = parseInt(season) === CURRENT_SEASON_YEAR
-  
+
   try {
     const { data, error } = await supabase
       .from('sds_plus_cache')
@@ -183,22 +211,25 @@ export async function getCachedSDSPlus(leagueKey: string, season: string): Promi
       .eq('league_key', leagueKey)
       .eq('season', season)
       .order('sds_plus_rank', { ascending: true })
-    
-    if (error || !data || data.length === 0) {
+
+    if (error || !data || data.length === 0) return null
+
+    // Check freshness
+    const oldestCache = data.reduce((oldest, row) => {
+      const d = new Date(row.cached_at)
+      return !oldest || d < oldest ? d : oldest
+    }, null as Date | null)
+
+    if (oldestCache && !isCacheFresh(oldestCache.toISOString(), isCurrentSeason)) return null
+
+    // If any row lacks v2 formula flag, force recompute so breakdown columns get populated
+    const hasV1Rows = data.some(row => !row.formula_version || row.formula_version !== 'v2')
+    if (hasV1Rows) {
+      console.log(`[Cache] Invalidating ${leagueKey} – contains v1 rows, forcing v2 recompute`)
       return null
     }
-    
-    // Check if cache is fresh (use oldest cached_at)
-    const oldestCache = data.reduce((oldest, row) => {
-      const rowDate = new Date(row.cached_at)
-      return !oldest || rowDate < oldest ? rowDate : oldest
-    }, null as Date | null)
-    
-    if (oldestCache && !isCacheFresh(oldestCache.toISOString(), isCurrentSeason)) {
-      return null // Cache expired
-    }
-    
-    // Transform database rows to PPSIScore format
+
+    // Transform DB rows → PPSIScore (breakdown is now stored in the DB)
     return data.map(row => ({
       owner: row.owner_name,
       team_key: row.team_key,
@@ -206,14 +237,21 @@ export async function getCachedSDSPlus(leagueKey: string, season: string): Promi
       rank: row.sds_plus_rank,
       finalRank: row.final_rank,
       breakdown: {
-        dominance: 0,
-        scoring: 0,
-        scheduleLuck: 0,
-        seasonResult: 0,
+        dominance:    row.breakdown_dominance  != null ? parseFloat(row.breakdown_dominance)  : 0,
+        scoring:      row.breakdown_scoring    != null ? parseFloat(row.breakdown_scoring)    : 0,
+        record:       row.breakdown_record     != null ? parseFloat(row.breakdown_record)     : 0,
+        scheduleLuck: row.breakdown_luck       != null ? parseFloat(row.breakdown_luck)       : 0,
+        seasonResult: row.breakdown_result     != null ? parseFloat(row.breakdown_result)     : 0,
       },
       dominanceRate: 0,
-      scoringIndex: 0,
-      interpretation: '',
+      scoringIndex: row.sds_plus_score ? parseFloat(row.sds_plus_score) / 100 : 0,
+      regularSeasonPF: row.regular_season_pf ? parseFloat(row.regular_season_pf) : (row.points_for ? parseFloat(row.points_for) : 0),
+      interpretation: '',   // rehydrated on display
+      isFallback: row.is_fallback ?? false,
+      isPartial:  row.is_partial  ?? false,
+      version: (row.formula_version as 'v1' | 'v2') ?? 'v2',
+      regularSeasonWeeks: row.regular_season_weeks ?? 14,
+      numPlayoffTeams: row.num_playoff_teams ?? 6,
       wins: row.wins ?? 0,
       losses: row.losses ?? 0,
       ties: row.ties ?? 0,
@@ -227,46 +265,115 @@ export async function getCachedSDSPlus(leagueKey: string, season: string): Promi
 }
 
 /**
- * Cache SDS+ scores for a league
+ * Cache SDS+ scores for a league (stores full v2 breakdown so cache hits
+ * return correct component values — not zeros).
  */
-export async function cacheSDSPlus(leagueKey: string, season: string, scores: SDSPlusScore[]): Promise<void> {
+export async function cacheSDSPlus(
+  leagueKey: string,
+  season: string,
+  scores: PPSIScore[]
+): Promise<void> {
+  if (!isAllowedLeagueKey(leagueKey)) {
+    console.warn(`[cache] cacheSDSPlus: blocked non-allowed league key "${leagueKey}"`)
+    return
+  }
   const supabase = createServerSupabaseClient()
-  
+
   try {
     // Delete old cached scores for this league/season
-    await supabase
-      .from('sds_plus_cache')
-      .delete()
-      .eq('league_key', leagueKey)
-      .eq('season', season)
-    
-    // Insert new scores (callers may pass scores with optional wins/losses/etc. from merged standings)
-    const rows = scores.map(score => {
-      const s = score as SDSPlusScore & { wins?: number; losses?: number; ties?: number; points_for?: number; points_against?: number }
-      return {
-        league_key: leagueKey,
-        season: season,
-        owner_name: score.owner,
-        team_key: score.team_key,
-        sds_plus_score: score.score,
-        sds_plus_rank: score.rank,
-        final_rank: score.finalRank,
-        wins: s.wins ?? 0,
-        losses: s.losses ?? 0,
-        ties: s.ties ?? 0,
-        points_for: s.points_for ?? 0,
-        points_against: s.points_against ?? 0,
-      }
-    })
-    
-    await supabase
-      .from('sds_plus_cache')
-      .insert(rows)
+    await supabase.from('sds_plus_cache').delete().eq('league_key', leagueKey).eq('season', season)
+
+    const rows = scores.map(score => ({
+      league_key: leagueKey,
+      season,
+      owner_name: score.owner,
+      team_key: score.team_key,
+      sds_plus_score: score.score,
+      sds_plus_rank: score.rank,
+      final_rank: score.finalRank,
+      wins: score.wins ?? 0,
+      losses: score.losses ?? 0,
+      ties: score.ties ?? 0,
+      points_for: score.points_for ?? 0,
+      points_against: score.points_against ?? 0,
+      // v2 breakdown columns (populated after migration)
+      breakdown_dominance:  score.breakdown.dominance,
+      breakdown_scoring:    score.breakdown.scoring,
+      breakdown_record:     score.breakdown.record,
+      breakdown_result:     score.breakdown.seasonResult,
+      breakdown_luck:       score.breakdown.scheduleLuck,
+      regular_season_pf:    score.regularSeasonPF ?? score.points_for ?? 0,
+      regular_season_weeks: score.regularSeasonWeeks ?? 14,
+      num_playoff_teams:    score.numPlayoffTeams ?? 6,
+      formula_version:      score.version ?? 'v2',
+      is_fallback:          score.isFallback ?? false,
+      is_partial:           score.isPartial  ?? false,
+    }))
+
+    await supabase.from('sds_plus_cache').insert(rows)
   } catch (error) {
     console.error('Error caching SDS+ scores:', error)
-    // Don't throw - caching failures shouldn't break the app
+    // Don't throw — caching failures shouldn't break the app
   }
 }
+
+// ─── League Settings Cache ────────────────────────────────────────────────────
+
+/**
+ * Get cached league settings (playoff_start_week, num_playoff_teams, etc.)
+ */
+export async function getCachedLeagueSettings(leagueKey: string): Promise<LeagueSettings | null> {
+  const supabase = createServerSupabaseClient()
+  try {
+    const { data, error } = await supabase
+      .from('league_settings_cache')
+      .select('*')
+      .eq('league_key', leagueKey)
+      .single()
+
+    if (error || !data) return null
+
+    // Historical league settings never change — always return cached value
+    return {
+      num_teams: data.num_teams,
+      num_playoff_teams: data.num_playoff_teams,
+      playoff_start_week: data.playoff_start_week,
+      num_regular_season_weeks: data.num_regular_season_weeks,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Cache league settings for a season.
+ */
+export async function cacheLeagueSettings(
+  leagueKey: string,
+  season: string,
+  settings: LeagueSettings
+): Promise<void> {
+  if (!isAllowedLeagueKey(leagueKey)) {
+    console.warn(`[cache] cacheLeagueSettings: blocked non-allowed league key "${leagueKey}"`)
+    return
+  }
+  const supabase = createServerSupabaseClient()
+  try {
+    // Upsert so re-running is safe
+    await supabase.from('league_settings_cache').upsert({
+      league_key: leagueKey,
+      season,
+      num_teams: settings.num_teams,
+      num_playoff_teams: settings.num_playoff_teams,
+      playoff_start_week: settings.playoff_start_week,
+      num_regular_season_weeks: settings.num_regular_season_weeks,
+    }, { onConflict: 'league_key' })
+  } catch (error) {
+    console.error('Error caching league settings:', error)
+  }
+}
+
+// ─── Manager stats ────────────────────────────────────────────────────────────
 
 /**
  * Get cached manager stats
@@ -425,6 +532,10 @@ export async function cacheMatchups(
     status?: string
   }>
 ): Promise<void> {
+  if (!isAllowedLeagueKey(leagueKey)) {
+    console.warn(`[cache] cacheMatchups: blocked non-allowed league key "${leagueKey}"`)
+    return
+  }
   const supabase = createServerSupabaseClient()
   
   try {

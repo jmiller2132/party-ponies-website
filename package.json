@@ -20,7 +20,10 @@
     "db-reset": "supabase db reset",
     "db-diff": "supabase db diff",
     "supabase-init": "supabase init",
-    "supabase-link": "supabase link"
+    "supabase-link": "supabase link",
+    "recompute-ppsi": "tsx scripts/recompute-ppsi.ts",
+    "cleanup-stray": "tsx scripts/cleanup-stray-leagues.ts",
+    "migrate-add-is-partial": "tsx scripts/migrate-add-is-partial.ts"
   },
   "dependencies": {
     "@auth/supabase-adapter": "^1.11.1",

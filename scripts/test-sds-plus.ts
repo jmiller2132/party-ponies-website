@@ -65,13 +65,23 @@ async function testPPSI() {
     const uniqueWeeks = new Set(weeklyScores.map(ws => ws.week))
     console.log(`Weeks found: ${Array.from(uniqueWeeks).sort((a, b) => a - b).join(', ')}`)
 
-    const maxWeek = weeklyScores.length > 0 ? Math.max(...weeklyScores.map(ws => ws.week)) : 14
-    const regularSeasonWeeks = Math.min(maxWeek, 14)
+    // Fetch league settings for correct playoff/week info
+    let regularSeasonWeeks = 14
+    let numPlayoffTeams = 6
+    try {
+      const { fetchLeagueSettings } = await import("../lib/yahoo-api")
+      const settings = await fetchLeagueSettings(league2023)
+      regularSeasonWeeks = settings.num_regular_season_weeks
+      numPlayoffTeams    = settings.num_playoff_teams
+      console.log(`League settings: ${regularSeasonWeeks} regular-season weeks, ${numPlayoffTeams} playoff teams`)
+    } catch (e) {
+      console.warn(`Could not fetch league settings, using defaults: ${e instanceof Error ? e.message : e}`)
+    }
     console.log(`Regular season weeks: ${regularSeasonWeeks}\n`)
 
-    // Calculate PPSI
-    const scores = calculatePPSI(standings, weeklyScores, regularSeasonWeeks)
-    const info = getPPSIInfo()
+    // Calculate PPSI v2
+    const scores = calculatePPSI(standings, weeklyScores, regularSeasonWeeks, numPlayoffTeams, 'v2')
+    const info = getPPSIInfo('v2')
 
     console.log("=".repeat(100))
     console.log(`${info.name} — ${info.fullName}`)
@@ -79,28 +89,45 @@ async function testPPSI() {
     console.log(info.description)
     console.log()
 
-    console.log("Rank | Owner              | PPSI   | Finish | DOM   | SCR   | LUCK  | RESULT")
-    console.log("-".repeat(100))
+    console.log("Rank | Owner              | PPSI   | Finish | DOM   | SCR   | REC  | RESULT | LUCK†  | Check")
+    console.log("-".repeat(110))
 
+    let allMatch = true
     scores.forEach(score => {
       const owner = (score.owner || "Unknown").padEnd(18)
       const ppsi = score.score.toFixed(1).padStart(6)
       const finish = score.finalRank.toString().padStart(6)
       const dom = score.breakdown.dominance.toFixed(1).padStart(5)
       const scr = score.breakdown.scoring.toFixed(1).padStart(5)
-      const luck = (score.breakdown.scheduleLuck >= 0 ? '+' : '') + score.breakdown.scheduleLuck.toFixed(1).padStart(5)
+      const rec = score.breakdown.record.toFixed(1).padStart(4)
       const result = score.breakdown.seasonResult.toString().padStart(6)
-      console.log(`${score.rank.toString().padStart(4)} | ${owner} | ${ppsi} | ${finish} | ${dom} | ${scr} | ${luck} | ${result}`)
+      const luck = score.isFallback ? '  —   ' : ((score.breakdown.scheduleLuck >= 0 ? '+' : '') + score.breakdown.scheduleLuck.toFixed(1)).padStart(6)
+      // Verify: DOM + SCR + REC + RESULT should equal score (within 0.1)
+      const computed = score.breakdown.dominance + score.breakdown.scoring + score.breakdown.record + score.breakdown.seasonResult
+      const delta = Math.abs(computed - score.score)
+      const check = delta <= 0.15 ? '✓' : `✗ (${delta.toFixed(2)})`
+      if (delta > 0.15) allMatch = false
+      console.log(`${score.rank.toString().padStart(4)} | ${owner} | ${ppsi} | ${finish} | ${dom} | ${scr} | ${rec} | ${result} | ${luck} | ${check}`)
     })
+
+    console.log()
+    console.log(allMatch ? '✓ All DOM+SCR+REC+RESULT = PPSI within 0.1' : '✗ SOME SCORES DO NOT BALANCE — check rounding')
+
+    // Zero-score exclusion summary
+    const zeroWeeks = scores.filter(s => s.isFallback)
+    if (zeroWeeks.length > 0) {
+      console.log(`\n⚠ Fallback (no weekly data): ${zeroWeeks.map(s => s.owner).join(', ')}`)
+    }
 
     console.log("\n" + "=".repeat(100))
     console.log("PPSI INTERPRETATION")
     console.log("=".repeat(100))
-    console.log("110+ → All-time, generational season")
-    console.log("95–109 → Elite: dominant team or dominant result")
-    console.log("80–94 → Very good season")
-    console.log("65–79 → Solid, above-average season")
-    console.log("<65 → Below average season")
+    console.log("115+ → All-time, generational season (~top 5%)")
+    console.log("98–114 → Elite: dominant team or dominant result (~next 10%)")
+    console.log("83–97 → Very good season (~next 15%)")
+    console.log("68–82 → Above average season (~next 25%)")
+    console.log("53–67 → Average season (~next 25%)")
+    console.log("<53 → Below average season (~bottom 20%)")
     console.log()
 
     const champion = scores.find(s => s.finalRank === 1)

@@ -56,19 +56,20 @@ export const OWNER_NAME_MAPPINGS: OwnerNameMapping = {
   
   // 2013 mappings
   "--hidden-- (2013) [Fear Boners]": "Ben Simon",
-  "--hidden-- (2013) [Rhymes With Punt]": "Jack Harvath",
+  // Corrected spelling: "Jack Harvarth" (matches 2017–2025 entry for same person)
+  "--hidden-- (2013) [Rhymes With Punt]": "Jack Harvarth",
   
   // 2014 mappings
   "--hidden-- (2014) [Fear Boners]": "Ben Simon",
-  "--hidden-- (2014) [Rhymes With Punt]": "Jack Harvath",
+  "--hidden-- (2014) [Rhymes With Punt]": "Jack Harvarth",
   
   // 2015 mappings
   "--hidden-- (2015) [Fear Boners]": "Ben Simon",
-  "--hidden-- (2015) [The Fighting ACL's]": "Jack Harvath",
+  "--hidden-- (2015) [The Fighting ACL's]": "Jack Harvarth",
   
   // 2016 mappings
   "--hidden-- (2016) [Fear Boners]": "Ben Simon",
-  "--hidden-- (2016) [The Fighting ACL's]": "Jack Harvath",
+  "--hidden-- (2016) [The Fighting ACL's]": "Jack Harvarth",
   
   // "C Money" - 13 season(s): 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025
   //   Team names: C Money, Balls, Lamar Jackson, Mr. Big Tiddy, C $, Kareem Pies...

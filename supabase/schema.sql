@@ -108,7 +108,10 @@ CREATE INDEX IF NOT EXISTS idx_records_type ON records(record_type);
 CREATE INDEX IF NOT EXISTS idx_records_team_key ON records(team_key);
 CREATE INDEX IF NOT EXISTS idx_records_league_key ON records(league_key);
 
--- Table to cache SDS+ scores for performance
+-- Table to cache SDS+ / PPSI scores for performance
+-- v2 adds breakdown columns and formula_version so cache hits return full components.
+-- Run supabase/migrations/add_ppsi_v2_breakdown.sql to add the new columns to an
+-- existing database.
 CREATE TABLE IF NOT EXISTS sds_plus_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   league_key TEXT NOT NULL,
@@ -123,8 +126,33 @@ CREATE TABLE IF NOT EXISTS sds_plus_cache (
   ties INTEGER DEFAULT 0,
   points_for DECIMAL(10, 2) DEFAULT 0,
   points_against DECIMAL(10, 2) DEFAULT 0,
+  -- PPSI v2 breakdown (added in migration add_ppsi_v2_breakdown.sql)
+  breakdown_dominance  DECIMAL(10, 2),
+  breakdown_scoring    DECIMAL(10, 2),
+  breakdown_record     DECIMAL(10, 2),
+  breakdown_result     DECIMAL(10, 2),
+  breakdown_luck       DECIMAL(10, 2),
+  regular_season_pf    DECIMAL(10, 2),
+  regular_season_weeks INTEGER,
+  num_playoff_teams    INTEGER,
+  formula_version      TEXT DEFAULT 'v1',
+  is_fallback          BOOLEAN DEFAULT false,
+  is_partial           BOOLEAN DEFAULT false,   -- true when some reg-season weeks are missing from all-play
   cached_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(league_key, season, owner_name)
+);
+
+-- League settings cache — playoff_start_week, num_playoff_teams, etc.
+-- Never hardcode these; always read from Yahoo and cache here.
+CREATE TABLE IF NOT EXISTS league_settings_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  league_key TEXT NOT NULL UNIQUE,
+  season TEXT NOT NULL,
+  num_teams INTEGER NOT NULL DEFAULT 10,
+  num_playoff_teams INTEGER NOT NULL DEFAULT 6,
+  playoff_start_week INTEGER NOT NULL DEFAULT 15,
+  num_regular_season_weeks INTEGER NOT NULL DEFAULT 14,
+  cached_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Indexes for faster queries

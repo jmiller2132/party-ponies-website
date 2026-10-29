@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Trophy, Medal, Info, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Trophy, Medal, Info, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -18,7 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { PPSIScore } from "@/lib/sds-plus"
+import { PPSIScore, PPSI_V2_THRESHOLDS } from "@/lib/sds-plus"
 
 type SortField =
   | 'year'
@@ -26,12 +26,13 @@ type SortField =
   | 'score'
   | 'dominance'
   | 'scoring'
+  | 'record'
   | 'scheduleLuck'
   | 'seasonResult'
 type SortDirection = 'asc' | 'desc'
 
 interface SDSPlusTableProps {
-  scores: Array<PPSIScore & { year?: number; wins?: number; losses?: number; ties?: number; points_for?: number; points_against?: number }>
+  scores: Array<PPSIScore & { year?: number }>
   defaultSort?: SortField
   defaultDirection?: SortDirection
   showYear?: boolean
@@ -93,6 +94,10 @@ export function SDSPlusTable({
           aValue = a.breakdown.scoring
           bValue = b.breakdown.scoring
           break
+        case 'record':
+          aValue = a.breakdown.record
+          bValue = b.breakdown.record
+          break
         case 'scheduleLuck':
           aValue = a.breakdown.scheduleLuck
           bValue = b.breakdown.scheduleLuck
@@ -153,15 +158,26 @@ export function SDSPlusTable({
   }
 
   const ppsiColor = (score: number) =>
-    score >= 110
+    score >= PPSI_V2_THRESHOLDS.allTime
       ? 'text-yellow-600'
-      : score >= 95
+      : score >= PPSI_V2_THRESHOLDS.elite
         ? 'text-blue-600'
-        : score >= 80
+        : score >= PPSI_V2_THRESHOLDS.veryGood
           ? 'text-green-600'
-          : score >= 65
+          : score >= PPSI_V2_THRESHOLDS.aboveAverage
             ? 'text-gray-600'
-            : 'text-muted-foreground'
+            : score >= PPSI_V2_THRESHOLDS.average
+              ? 'text-muted-foreground'
+              : 'text-muted-foreground/60'
+
+  const ppsiLabel = (score: number) => {
+    if (score >= PPSI_V2_THRESHOLDS.allTime) return 'All-time'
+    if (score >= PPSI_V2_THRESHOLDS.elite) return 'Elite'
+    if (score >= PPSI_V2_THRESHOLDS.veryGood) return 'Very good'
+    if (score >= PPSI_V2_THRESHOLDS.aboveAverage) return 'Above avg'
+    if (score >= PPSI_V2_THRESHOLDS.average) return 'Average'
+    return 'Below avg'
+  }
 
   return (
     <Table>
@@ -184,7 +200,7 @@ export function SDSPlusTable({
             <SortButton
               field="score"
               label="PPSI"
-              tooltip="Party Ponies Season Index — overall season quality score. 110+ = all-time great, 95–109 = elite, 80–94 = very good, 65–79 = solid, <65 = below average."
+              tooltip={`Party Ponies Season Index v2 = DOM + SCR + REC + RESULT. LUCK is shown separately but not counted. Thresholds: ${PPSI_V2_THRESHOLDS.allTime}+ All-time · ${PPSI_V2_THRESHOLDS.elite}+ Elite · ${PPSI_V2_THRESHOLDS.veryGood}+ Very good · ${PPSI_V2_THRESHOLDS.aboveAverage}+ Above avg · ${PPSI_V2_THRESHOLDS.average}+ Average`}
             />
           </TableHead>
           <TableHead className="text-right">
@@ -200,28 +216,35 @@ export function SDSPlusTable({
             <SortButton
               field="dominance"
               label="DOM"
-              tooltip="Dominance (0–50): All-Play Win% × 50. Measures how often you beat every other team each week. Completely schedule-neutral — your toughest rival can't inflate or deflate this."
+              tooltip="Dominance (0–50): All-Play Win% × 50. Counts all-play ties as half a win: APW = (wins + 0.5×ties) / matchups. Only regular-season weeks. Zero-score team-weeks excluded."
             />
           </TableHead>
           <TableHead className="text-right">
             <SortButton
               field="scoring"
               label="SCR"
-              tooltip="Era-Adjusted Scoring (0–55+): Blend of points vs. league average (25 pts) and your within-season scoring percentile (25 pts). Compares fairly across years with different scoring totals."
+              tooltip="Era-Adjusted Scoring (0–50): (regular-season PF / league avg PF) × 25 + scoring percentile × 25. Percentile = (N − rank) / (N − 1) where N = teams in that season. Uses regular-season PF only."
             />
           </TableHead>
           <TableHead className="text-right">
             <SortButton
-              field="scheduleLuck"
-              label="LUCK"
-              tooltip="Schedule Luck Adjustment (±7): (APW − actual win%) × 15. Positive = your dominance outpaced your record (unlucky schedule). Negative = your record outpaced your dominance (easy draws)."
+              field="record"
+              label="REC"
+              tooltip="Record (0–10): (W + 0.5×T) / games × 10. Based on regular-season win%. Replaces schedule luck as the record component in PPSI v2."
             />
           </TableHead>
           <TableHead className="text-right">
             <SortButton
               field="seasonResult"
               label="RESULT"
-              tooltip="Season Result (0–30): Champion = 30, Runner-up = 18, 3rd = 10, 4th = 4, missed playoffs = 0."
+              tooltip="Season Result (0–38): Champion 35 · Runner-up 20 · 3rd 10 · 4th 5 · Made playoffs & lost first round 2 · Missed playoffs 0. Plus +3 for #1 regular-season seed. Playoff size varies by season."
+            />
+          </TableHead>
+          <TableHead className="text-right">
+            <SortButton
+              field="scheduleLuck"
+              label="LUCK†"
+              tooltip="Schedule Luck (shown, not counted): (APW − actual win%) × 15. Positive = dominance outpaced record (tough schedule). Negative = record outpaced dominance (easy draws). † Not included in PPSI v2 total."
             />
           </TableHead>
         </TableRow>
@@ -258,9 +281,26 @@ export function SDSPlusTable({
                   <TooltipTrigger asChild>
                     <span className={cn('text-lg cursor-help', ppsiColor(score.score))}>
                       {score.score.toFixed(1)}
+                      {(score.isFallback || score.isPartial) && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertCircle className="inline h-3 w-3 ml-0.5 text-amber-500 align-super" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">
+                                {score.isPartial
+                                  ? 'Partial week data — one or more regular-season weeks missing from all-play. Fetch complete data to remove this marker.'
+                                  : 'All-play data unavailable for this season — DOM and Luck are estimated from actual win%.'}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
+                    <p className="text-xs font-semibold">{ppsiLabel(score.score)}</p>
                     <p className="text-xs">{score.interpretation}</p>
                   </TooltipContent>
                 </Tooltip>
@@ -287,18 +327,8 @@ export function SDSPlusTable({
             <TableCell className="text-right">
               {score.breakdown.scoring.toFixed(1)}
             </TableCell>
-            <TableCell
-              className={cn(
-                'text-right',
-                score.breakdown.scheduleLuck > 0.5
-                  ? 'text-blue-600'
-                  : score.breakdown.scheduleLuck < -0.5
-                    ? 'text-orange-600'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {score.breakdown.scheduleLuck > 0 ? '+' : ''}
-              {score.breakdown.scheduleLuck.toFixed(1)}
+            <TableCell className="text-right">
+              {score.breakdown.record.toFixed(1)}
             </TableCell>
             <TableCell className="text-right font-medium">
               {score.breakdown.seasonResult > 0 ? (
@@ -306,6 +336,21 @@ export function SDSPlusTable({
               ) : (
                 <span className="text-muted-foreground">0</span>
               )}
+            </TableCell>
+            <TableCell
+              className={cn(
+                'text-right text-sm text-muted-foreground',
+                score.breakdown.scheduleLuck > 0.5
+                  ? 'text-blue-500'
+                  : score.breakdown.scheduleLuck < -0.5
+                    ? 'text-orange-500'
+                    : '',
+                score.isFallback ? 'opacity-40' : '',
+              )}
+            >
+              {score.isFallback
+                ? '—'
+                : `${score.breakdown.scheduleLuck > 0 ? '+' : ''}${score.breakdown.scheduleLuck.toFixed(1)}`}
             </TableCell>
           </TableRow>
         ))}

@@ -44,3 +44,6 @@ bfg-replacements.txt
 next-env.d.ts
 
 certificates
+# local backups and script output
+/backups/
+/output/

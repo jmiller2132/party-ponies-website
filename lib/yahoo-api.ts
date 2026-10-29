@@ -493,9 +493,11 @@ export async function fetchWeekMatchups(leagueKey: string, week: number, userId?
 export async function fetchAllWeeklyScores(leagueKey: string, userId?: string): Promise<Array<{ team_key: string; week: number; points: number; opponent_key?: string }>> {
   const weeklyScores: Array<{ team_key: string; week: number; points: number; opponent_key?: string }> = []
   
-  // Fetch weeks 1-14 (typical regular season)
-  // We'll try to fetch as many weeks as available
-  const weeksToFetch = Array.from({ length: 14 }, (_, i) => i + 1) // Weeks 1-14
+  // Fetch up to week 17 (covers longest possible regular season + some buffer).
+  // calculatePPSI will filter to regularSeasonWeeks from league settings.
+  // Zero-point scores are intentionally INCLUDED here so calculatePPSI can
+  // identify and log bad-data weeks (they are excluded from all-play there).
+  const weeksToFetch = Array.from({ length: 17 }, (_, i) => i + 1) // Weeks 1-17
   
   let successCount = 0
   let errorCount = 0
@@ -512,48 +514,36 @@ export async function fetchAllWeeklyScores(leagueKey: string, userId?: string): 
             const team1Points = matchup.team1.points || 0
             const team2Points = matchup.team2.points || 0
             
-            // Add team1's score with team2 as opponent
-            if (team1Points > 0) {
+            // Add BOTH teams unconditionally (including zero-point entries).
+            // calculatePPSI identifies zero-score weeks and excludes them from
+            // all-play — but we need visibility of the zero to do that correctly.
+            weeklyScores.push({
+              team_key: matchup.team1.key,
+              week: matchup.week,
+              points: team1Points,
+              opponent_key: matchup.team2.key,
+            })
+            weeklyScores.push({
+              team_key: matchup.team2.key,
+              week: matchup.week,
+              points: team2Points,
+              opponent_key: matchup.team1.key,
+            })
+          } else {
+            // Fallback: opponent info missing — still record whatever scores exist
+            if (matchup.team1?.key) {
               weeklyScores.push({
                 team_key: matchup.team1.key,
                 week: matchup.week,
-                points: team1Points,
-                opponent_key: matchup.team2.key, // Track opponent
+                points: matchup.team1.points || 0,
               })
             }
-            
-            // Add team2's score with team1 as opponent
-            if (team2Points > 0) {
+            if (matchup.team2?.key) {
               weeklyScores.push({
                 team_key: matchup.team2.key,
                 week: matchup.week,
-                points: team2Points,
-                opponent_key: matchup.team1.key, // Track opponent
+                points: matchup.team2.points || 0,
               })
-            }
-          } else {
-            // Fallback: if opponent info is missing, still record the score
-            if (matchup.team1?.key) {
-              const points = matchup.team1.points || 0
-              if (points > 0) {
-                weeklyScores.push({
-                  team_key: matchup.team1.key,
-                  week: matchup.week,
-                  points: points,
-                  // opponent_key will be undefined if team2 is missing
-                })
-              }
-            }
-            if (matchup.team2?.key) {
-              const points = matchup.team2.points || 0
-              if (points > 0) {
-                weeklyScores.push({
-                  team_key: matchup.team2.key,
-                  week: matchup.week,
-                  points: points,
-                  // opponent_key will be undefined if team1 is missing
-                })
-              }
             }
           }
         })
@@ -577,6 +567,121 @@ export async function fetchAllWeeklyScores(leagueKey: string, userId?: string): 
   
   return weeklyScores
 }
+
+// ─── League Settings ──────────────────────────────────────────────────────────
+
+export interface LeagueSettings {
+  num_teams: number
+  num_playoff_teams: number
+  playoff_start_week: number
+  /** = playoff_start_week − 1 */
+  num_regular_season_weeks: number
+}
+
+/**
+ * Fetch league settings (playoff_start_week, num_playoff_teams, num_teams).
+ * Used to determine the correct regular-season week range for PPSI.
+ */
+export async function fetchLeagueSettings(
+  leagueKey: string,
+  userId?: string
+): Promise<LeagueSettings> {
+  const accessToken = await getValidYahooToken(userId)
+  const url = `${YAHOO_FANTASY_BASE_URL}/league/${leagueKey}/settings;format=json`
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  })
+
+  const responseText = await response.text()
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch league settings: ${response.status} – ${responseText.substring(0, 300)}`
+    )
+  }
+
+  let data: any
+  let isXml = false
+
+  if (responseText.trim().startsWith('<?xml') || responseText.trim().startsWith('<')) {
+    isXml = true
+    try {
+      data = await parseStringPromise(responseText)
+    } catch (e) {
+      throw new Error(`Failed to parse XML settings: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  } else {
+    try {
+      data = JSON.parse(responseText)
+    } catch (e) {
+      throw new Error(`Failed to parse JSON settings: ${responseText.substring(0, 300)}`)
+    }
+  }
+
+  // ─── XML path ──────────────────────────────────────────────────────────────
+  if (isXml && data.fantasy_content?.league) {
+    const leagues = Array.isArray(data.fantasy_content.league)
+      ? data.fantasy_content.league
+      : [data.fantasy_content.league]
+    const leagueData = leagues[0]
+
+    const settings = leagueData?.settings?.[0] ?? {}
+    const numTeams = parseInt(
+      Array.isArray(settings.num_teams) ? settings.num_teams[0] : settings.num_teams || '10'
+    )
+    const numPlayoffTeams = parseInt(
+      Array.isArray(settings.num_playoff_teams)
+        ? settings.num_playoff_teams[0]
+        : settings.num_playoff_teams || '6'
+    )
+    const playoffStartWeek = parseInt(
+      Array.isArray(settings.playoff_start_week)
+        ? settings.playoff_start_week[0]
+        : settings.playoff_start_week || '15'
+    )
+
+    return {
+      num_teams: numTeams || 10,
+      num_playoff_teams: numPlayoffTeams || 6,
+      playoff_start_week: playoffStartWeek || 15,
+      num_regular_season_weeks: (playoffStartWeek || 15) - 1,
+    }
+  }
+
+  // ─── JSON path ─────────────────────────────────────────────────────────────
+  // Yahoo JSON: fantasy_content.league is [leagueMetaObj, { settings: [settingsObj] }]
+  const leagueArr = data?.fantasy_content?.league
+  if (Array.isArray(leagueArr)) {
+    const settingsHolder = leagueArr.find((item: any) => item?.settings)
+    const settings = settingsHolder?.settings?.[0] ?? settingsHolder?.settings ?? {}
+
+    const numTeams = parseInt(settings.num_teams || '10')
+    const numPlayoffTeams = parseInt(settings.num_playoff_teams || '6')
+    const playoffStartWeek = parseInt(settings.playoff_start_week || '15')
+
+    return {
+      num_teams: numTeams || 10,
+      num_playoff_teams: numPlayoffTeams || 6,
+      playoff_start_week: playoffStartWeek || 15,
+      num_regular_season_weeks: (playoffStartWeek || 15) - 1,
+    }
+  }
+
+  // Fallback defaults (conservative)
+  console.warn(`[fetchLeagueSettings] Could not parse settings for ${leagueKey}, using defaults`)
+  return {
+    num_teams: 10,
+    num_playoff_teams: 6,
+    playoff_start_week: 15,
+    num_regular_season_weeks: 14,
+  }
+}
+
+// ─── User leagues ─────────────────────────────────────────────────────────────
 
 /**
  * Fetch user's leagues from Yahoo API

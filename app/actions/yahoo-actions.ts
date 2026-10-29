@@ -1,9 +1,26 @@
 "use server"
 
-import { fetchLeagueStandings, fetchCurrentWeekMatchups, fetchUserLeagues, fetchWeekMatchups, fetchAllWeeklyScores } from "@/lib/yahoo-api"
+import {
+  fetchLeagueStandings,
+  fetchCurrentWeekMatchups,
+  fetchUserLeagues,
+  fetchWeekMatchups,
+  fetchAllWeeklyScores,
+  fetchLeagueSettings,
+  LeagueSettings,
+} from "@/lib/yahoo-api"
 import { calculatePPSI } from "@/lib/sds-plus"
 import { getSession } from "@/lib/auth"
-import { getCachedStandings, cacheStandings, getCachedSDSPlus, cacheSDSPlus, getCachedMatchups, cacheMatchups } from "@/lib/cache"
+import {
+  getCachedStandings,
+  cacheStandings,
+  getCachedSDSPlus,
+  cacheSDSPlus,
+  getCachedMatchups,
+  cacheMatchups,
+  getCachedLeagueSettings,
+  cacheLeagueSettings,
+} from "@/lib/cache"
 import { getAllLeaguesWithMetadata } from "@/lib/league-utils"
 import { GAME_KEY_TO_YEAR } from "@/lib/yahoo-game-keys"
 
@@ -110,14 +127,49 @@ export async function getAllWeeklyScores(leagueKey: string) {
 }
 
 /**
- * Server Action to calculate PPSI for a season.
- * Always uses full weekly matchup data for accurate all-play win%.
- * Results are cached in Supabase so the compare page reuses the same
- * accurate numbers as the individual season page.
+ * Server Action to fetch league settings (cached).
+ * Returns playoff_start_week, num_playoff_teams, num_regular_season_weeks.
+ */
+export async function getLeagueSettings(leagueKey: string): Promise<{
+  success: boolean
+  data?: LeagueSettings
+  error?: string
+}> {
+  try {
+    // Cache-first
+    const cached = await getCachedLeagueSettings(leagueKey)
+    if (cached) return { success: true, data: cached }
+
+    // Fetch from Yahoo
+    const settings = await fetchLeagueSettings(leagueKey)
+
+    // Determine season for cache key
+    const gameKey = leagueKey.split('.')[0]
+    const season = GAME_KEY_TO_YEAR[gameKey] || new Date().getFullYear().toString()
+    await cacheLeagueSettings(leagueKey, season, settings)
+
+    return { success: true, data: settings }
+  } catch (error) {
+    console.warn(`[getLeagueSettings] Could not fetch settings for ${leagueKey}:`, error instanceof Error ? error.message : error)
+    return { success: false, error: error instanceof Error ? error.message : "Failed to fetch league settings" }
+  }
+}
+
+/**
+ * Server Action to calculate PPSI v2 for a season.
+ *
+ * Flow:
+ *  1. Cache hit → return cached scores (breakdown + total)
+ *  2. Cache miss → fetch standings + league settings + weekly scores
+ *               → calculatePPSI with correct regularSeasonWeeks + numPlayoffTeams
+ *               → cache full v2 result
+ *
+ * The _skipWeeklyScores param is kept for signature compatibility but is
+ * ignored — we always use weekly scores for accurate all-play.
  */
 export async function getSDSPlusScores(leagueKey: string, _skipWeeklyScores: boolean = false) {
   try {
-    // Get season from league key (try leagues first, fallback to parsing)
+    // Resolve season
     let season: string
     try {
       const leagues = await getAllLeaguesWithMetadata()
@@ -128,67 +180,76 @@ export async function getSDSPlusScores(leagueKey: string, _skipWeeklyScores: boo
       season = GAME_KEY_TO_YEAR[gameKey] || new Date().getFullYear().toString()
     }
 
-    // Always check cache first — accurate scores are written here after every full calculation
+    // ── Cache hit ─────────────────────────────────────────────────────────
+    // getCachedSDSPlus returns null for v1 rows, forcing a v2 recompute.
     const cachedScores = await getCachedSDSPlus(leagueKey, season)
     if (cachedScores) {
-      // Merge fresh standings data (W-L-T, PF, PA) into cached scores
+      // Merge live standings data (W-L-T, PF, PA) so the table always shows current numbers
       const standingsResult = await getLeagueStandings(leagueKey)
       if (standingsResult.success && standingsResult.data) {
-        const scoresWithStats = cachedScores.map(score => {
-          const standing = standingsResult.data.find(s => s.team_key === score.team_key)
-          if (!standing) return score
-          return {
-            ...score,
-            wins: standing.wins ?? 0,
-            losses: standing.losses ?? 0,
-            ties: standing.ties ?? 0,
-            points_for: standing.points_for ?? 0,
-            points_against: standing.points_against ?? 0,
-          }
+        const merged = cachedScores.map(score => {
+          const s = standingsResult.data!.find(st => st.team_key === score.team_key)
+          if (!s) return score
+          return { ...score, wins: s.wins ?? 0, losses: s.losses ?? 0, ties: s.ties ?? 0, points_for: s.points_for ?? 0, points_against: s.points_against ?? 0 }
         })
-        return { success: true, data: scoresWithStats }
+        return { success: true, data: merged }
       }
       return { success: true, data: cachedScores }
     }
 
-    // Cache miss — fetch standings and full weekly scores
-    const [standingsResult, weeklyScoresResult] = await Promise.all([
+    // ── Cache miss — full recompute ────────────────────────────────────────
+    const [standingsResult, weeklyScoresResult, settingsResult] = await Promise.all([
       getLeagueStandings(leagueKey),
       getAllWeeklyScores(leagueKey),
+      getLeagueSettings(leagueKey),
     ])
 
     if (!standingsResult.success || !standingsResult.data) {
-      return {
-        success: false,
-        error: standingsResult.error || "Failed to fetch standings"
-      }
+      return { success: false, error: standingsResult.error || "Failed to fetch standings" }
     }
 
     const weeklyScores = (weeklyScoresResult.success ? weeklyScoresResult.data : undefined) ?? []
 
-    // Determine regular season weeks
-    const maxWeek = weeklyScores.length > 0
-      ? Math.max(...weeklyScores.map(ws => ws.week))
-      : 14
-    const regularSeasonWeeks = Math.min(maxWeek, 14)
+    // Determine regular-season weeks from league settings (never hardcoded)
+    let regularSeasonWeeks: number
+    let numPlayoffTeams: number
 
-    const scores = calculatePPSI(standingsResult.data, weeklyScores, regularSeasonWeeks)
+    if (settingsResult.success && settingsResult.data) {
+      regularSeasonWeeks = settingsResult.data.num_regular_season_weeks
+      numPlayoffTeams    = settingsResult.data.num_playoff_teams
+    } else {
+      // Fallback: infer from data (safe default: cap at 14)
+      const maxWeek = weeklyScores.length > 0
+        ? Math.max(...weeklyScores.map(ws => ws.week))
+        : 14
+      regularSeasonWeeks = Math.min(maxWeek, 14)
+      numPlayoffTeams    = 6
+      console.warn(`[getSDSPlusScores] Using fallback regularSeasonWeeks=${regularSeasonWeeks} for ${leagueKey}`)
+    }
 
-    // Merge standings data (W-L-T, PF, PA) into scores
+    const scores = calculatePPSI(
+      standingsResult.data,
+      weeklyScores,
+      regularSeasonWeeks,
+      numPlayoffTeams,
+      'v2'
+    )
+
+    // Merge live standings (W-L-T, PF, PA — Yahoo's totals shown in the table)
     const scoresWithStats = scores.map(score => {
-      const standing = standingsResult.data.find(s => s.team_key === score.team_key)
-      if (!standing) return score
+      const s = standingsResult.data!.find(st => st.team_key === score.team_key)
+      if (!s) return score
       return {
         ...score,
-        wins: standing.wins ?? 0,
-        losses: standing.losses ?? 0,
-        ties: standing.ties ?? 0,
-        points_for: standing.points_for ?? 0,
-        points_against: standing.points_against ?? 0,
+        wins: s.wins ?? 0,
+        losses: s.losses ?? 0,
+        ties: s.ties ?? 0,
+        points_for: s.points_for ?? 0,
+        points_against: s.points_against ?? 0,
       }
     })
 
-    // Cache accurate results so both season and compare pages agree
+    // Persist accurate v2 results (including breakdown columns)
     await cacheSDSPlus(leagueKey, season, scoresWithStats)
 
     return { success: true, data: scoresWithStats }

@@ -5,7 +5,7 @@
 import { getAllLeaguesWithMetadata } from "./league-utils"
 import { getLeagueKeyForYear } from "./season-utils"
 import { fetchLeagueStandings } from "./yahoo-api"
-import { getCachedStandings } from "./cache"
+import { getCachedStandings, getCachedManagerStats } from "./cache"
 import { getSDSPlusScores } from "@/app/actions/yahoo-actions"
 import { getAllStandardizedNames } from "./owner-names"
 import { GAME_KEY_TO_YEAR } from "./yahoo-game-keys"
@@ -55,27 +55,38 @@ export interface HeadToHeadRecord {
 }
 
 /**
- * Get all unique managers across all seasons
- * Optimized: Uses cached manager stats when available (much faster!)
+ * Get all unique managers across all seasons.
+ * Priority:
+ *  1. manager_stats_cache (fastest)
+ *  2. league_standings table (no Yahoo API needed, always fresh)
+ *  3. Yahoo API (slow, needs valid session)
  */
 export async function getAllManagers(): Promise<string[]> {
-  // Check cache first - use manager_stats_cache which is faster
-  const { getCachedManagerStats } = await import('@/lib/cache')
+  // ── 1. manager_stats_cache ──────────────────────────────────────────────
   const cachedStats = await getCachedManagerStats()
-  
-  // If we have cached manager stats, use those names (much faster!)
   if (cachedStats && cachedStats.length > 0) {
-    return cachedStats.map(s => s.owner_name).sort()
+    return cachedStats.map((s: { owner_name: string }) => s.owner_name).sort()
   }
-  
-  // Fallback: Check cached managers list
-  const { getCachedManagers } = await import('@/lib/cache')
-  const cachedManagers = await getCachedManagers()
-  if (cachedManagers && cachedManagers.length > 0) {
-    return cachedManagers
+
+  // ── 2. league_standings Supabase table (no Yahoo call required) ─────────
+  try {
+    const { createServerSupabaseClient } = await import('@/lib/supabase')
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('league_standings')
+      .select('owner_name')
+      .is('week', null)              // final standings rows only
+      .not('owner_name', 'is', null)
+
+    if (!error && data && data.length > 0) {
+      const names = Array.from(new Set(data.map((r: { owner_name: string }) => r.owner_name).filter(Boolean))).sort() as string[]
+      if (names.length > 0) return names
+    }
+  } catch {
+    // fall through to API
   }
-  
-  // Last resort: Fetch from API (slow, but necessary if cache is empty)
+
+  // ── 3. Yahoo API (slow fallback) ────────────────────────────────────────
   const uniqueNames = new Set<string>()
   
   // Get all leagues
@@ -119,10 +130,8 @@ export async function getAllManagers(): Promise<string[]> {
  * Uses cached data from Supabase when available
  */
 export async function getAllManagerStatsLightweight(): Promise<ManagerStats[]> {
-  // Import cache functions once
-  const cacheModule = await import('@/lib/cache')
-  const { getCachedManagerStats, cacheManagerStats } = cacheModule
-  
+  const { cacheManagerStats } = await import('@/lib/cache')
+
   // Check cache first
   const cachedStats = await getCachedManagerStats()
   if (cachedStats) {
@@ -311,12 +320,21 @@ export async function getManagerStats(ownerName: string): Promise<ManagerStats |
   const leagues = await getAllLeaguesWithMetadata()
   const seasons: ManagerSeasonStats[] = []
   
-  // Fetch standings for all leagues in parallel first
+  // Fetch standings for all leagues in parallel first — cache-first, API fallback
   const standingsPromises = leagues.map(async (league) => {
     const year = parseInt(league.season) || 0
     if (year === 0) return { league, year, standings: null }
-    
+
+    const gameKey = league.league_key.split('.')[0]
+    const { GAME_KEY_TO_YEAR } = await import('./yahoo-game-keys')
+    const season = GAME_KEY_TO_YEAR[gameKey] || String(year)
+
     try {
+      // Cache-first: avoids Yahoo API (which requires fresh browser session tokens)
+      const cached = await getCachedStandings(league.league_key, season)
+      if (cached) return { league, year, standings: cached }
+
+      // Cache miss: hit Yahoo API
       const standings = await fetchLeagueStandings(league.league_key)
       return { league, year, standings }
     } catch (error) {
