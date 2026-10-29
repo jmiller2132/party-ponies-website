@@ -498,6 +498,54 @@ interface WeeklyScore {
   opponent_key?: string
 }
 
+/** Fetch one week's scoreboard from Yahoo (3 tries with backoff), cache it, and return matchup rows. */
+async function fetchWeekWithRetry(leagueKey: string, season: string, week: number): Promise<any[]> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const data = await yahooFetch(`/league/${leagueKey}/scoreboard;week=${week};format=json`)
+      const raw = data?.fantasy_content?.league
+      const lArr = Array.isArray(raw) ? raw : [raw]
+      const rows: any[] = []
+      for (const section of lArr) {
+        const sec = Array.isArray(section) ? section[0] : section
+        const matchups = sec?.scoreboard?.[0]?.matchups?.[0]?.matchup || []
+        for (const m of (Array.isArray(matchups) ? matchups : [])) {
+          const mo = Array.isArray(m) ? m[0] : m
+          const teamsArr = mo?.teams?.[0]?.team || []
+          const teamsList = Array.isArray(teamsArr) ? teamsArr : []
+          if (teamsList.length < 2) continue
+          const t1 = Array.isArray(teamsList[0]) ? teamsList[0][0] : teamsList[0]
+          const t2 = Array.isArray(teamsList[1]) ? teamsList[1][0] : teamsList[1]
+          const tk1 = Array.isArray(t1?.team_key) ? t1.team_key[0] : t1?.team_key
+          const tk2 = Array.isArray(t2?.team_key) ? t2.team_key[0] : t2?.team_key
+          const pts = (t: any): number => {
+            const tp = t?.team_points?.[0] ?? t?.team_points
+            if (typeof tp === 'object' && tp !== null) return parseFloat(tp?.total?.[0] ?? tp?.total ?? '0') || 0
+            return parseFloat(tp ?? '0') || 0
+          }
+          if (!tk1 || !tk2) continue
+          rows.push({
+            league_key: leagueKey, season, week,
+            matchup_key: `${tk1}-${tk2}`,
+            team1_key: tk1, team1_name: (Array.isArray(t1?.name) ? t1.name[0] : t1?.name) || '', team1_owner_name: null, team1_points: pts(t1),
+            team2_key: tk2, team2_name: (Array.isArray(t2?.name) ? t2.name[0] : t2?.name) || '', team2_owner_name: null, team2_points: pts(t2),
+            status: 'postevent',
+          })
+        }
+      }
+      if (rows.length > 0) {
+        await supabase.from('matchups').delete().eq('league_key', leagueKey).eq('season', season).eq('week', week)
+        await supabase.from('matchups').insert(rows)
+      }
+      return rows
+    } catch (e: any) {
+      console.warn(`    Week ${week} attempt ${attempt}/3 failed: ${e.message}`)
+      if (attempt < 3) await sleep(1000 * attempt * 2)
+    }
+  }
+  return []
+}
+
 async function fetchWeeklyScores(leagueKey: string, season: string, maxWeek: number): Promise<{ scores: WeeklyScore[], isPartial: boolean, missingWeeks: number[] }> {
   // Check if we have weeks cached in the 'matchups' table (the real table name)
   const { data: cachedMatchups } = await supabase
@@ -515,15 +563,28 @@ async function fetchWeeklyScores(leagueKey: string, season: string, maxWeek: num
     const missingWeeks = Array.from({ length: maxWeek }, (_, i) => i + 1).filter(w => !weeksPresent.has(w))
 
     if (hasAllRegular || (hasPartial && !hasAllRegular)) {
+      // Try to fill missing regular-season weeks from Yahoo before accepting partial data
       if (!hasAllRegular) {
-        console.log(`  ⚠ Using partial DB cache (missing reg-season weeks: ${missingWeeks.join(',')}). Those weeks excluded from all-play.`)
+        console.log(`  Missing reg-season weeks in cache: ${missingWeeks.join(',')}. Fetching from Yahoo...`)
+        for (const week of [...missingWeeks]) {
+          const rows = await fetchWeekWithRetry(leagueKey, season, week)
+          if (rows.length > 0) {
+            cachedMatchups.push(...rows)
+            missingWeeks.splice(missingWeeks.indexOf(week), 1)
+            console.log(`    ✓ Week ${week}: fetched ${rows.length} matchups and cached`)
+          }
+        }
+        if (missingWeeks.length > 0) {
+          console.log(`  ⚠ Using partial DB cache (missing reg-season weeks: ${missingWeeks.join(',')}). Those weeks excluded from all-play.`)
+        }
       }
+      const nowComplete = missingWeeks.length === 0
       const scores: WeeklyScore[] = []
       for (const m of cachedMatchups as any[]) {
         scores.push({ team_key: m.team1_key, week: m.week, points: parseFloat(m.team1_points) || 0, opponent_key: m.team2_key })
         scores.push({ team_key: m.team2_key, week: m.week, points: parseFloat(m.team2_points) || 0, opponent_key: m.team1_key })
       }
-      return { scores, isPartial: !hasAllRegular, missingWeeks }
+      return { scores, isPartial: !nowComplete, missingWeeks }
     }
   }
 
