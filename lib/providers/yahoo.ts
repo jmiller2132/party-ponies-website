@@ -29,7 +29,7 @@ export default function Yahoo<P extends YahooProfile>(
     authorization: {
       url: "https://api.login.yahoo.com/oauth2/request_auth",
       params: {
-        scope: "openid",
+        scope: "openid fspt-r", // fspt-r = Fantasy Sports read; without it every league call returns 403
         response_type: "code",
         redirect_uri: redirectUri,
       },
