@@ -299,7 +299,7 @@ export async function generateMetadata({ params }: ManagerPageProps): Promise<Me
     description: `${name}'s Party Ponies fantasy football career — all-time record, championships, PPSI scores, and head-to-head history.`,
     openGraph: {
       title: `${name} · Party Ponies`,
-      description: `Career stats, championships, and head-to-head record for ${name} across 13+ Party Ponies seasons.`,
+      description: `Career stats, championships, and head-to-head record for ${name} across every Party Ponies season since 2013.`,
     },
   }
 }

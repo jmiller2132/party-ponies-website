@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "Party Ponies Fantasy League",
     template: "%s · Party Ponies",
   },
-  description: "13+ seasons of Party Ponies fantasy football history — standings, records, PPSI rankings, and rivalry tracking.",
+  description: "Every Party Ponies fantasy football season since 2013 — standings, records, PPSI rankings, and rivalry tracking.",
   openGraph: {
     siteName: "Party Ponies Fantasy League",
     type: "website",

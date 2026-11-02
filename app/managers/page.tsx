@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "Manager Profiles",
-  description: "Career stats, head-to-head records, and PPSI scores for every Party Ponies fantasy football manager across 13+ seasons.",
+  description: "Career stats, head-to-head records, and PPSI scores for every Party Ponies fantasy football manager since 2013.",
   openGraph: {
     title: "Manager Profiles · Party Ponies",
     description: "Career stats and history for every Party Ponies manager — wins, losses, championships, and PPSI rankings.",

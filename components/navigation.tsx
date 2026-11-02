@@ -13,7 +13,7 @@ const navItems = [
   { href: "/", label: "Home", icon: HomeIcon },
   { href: "/standings", label: "Standings", icon: BarChart3 },
   { href: "/seasons", label: "Seasons", icon: Trophy },
-  { href: "/seasons/compare", label: "Compare", icon: Sparkles },
+  { href: "/seasons/compare", label: "PPSI", icon: Sparkles },
   { href: "/managers", label: "Managers", icon: Users },
   { href: "/records", label: "Records", icon: Award },
   { href: "/rivalry", label: "Rivalry", icon: Target },

@@ -11,13 +11,52 @@ import { PPSI_V2_THRESHOLDS } from "@/lib/sds-plus"
 
 export function SDSFormula() {
   const t = PPSI_V2_THRESHOLDS
+  const pillars = [
+    { key: "DOM", name: "Dominance", max: "0–50", text: "All-play win %: how often you'd have beaten every other team each week." },
+    { key: "SCR", name: "Scoring", max: "0–50", text: "Points vs. that season's league average, plus where you ranked." },
+    { key: "REC", name: "Record", max: "0–10", text: "Regular-season win % × 10. A 7-7 team gets 5.0." },
+    { key: "RESULT", name: "Season Result", max: "0–38", text: "Title 35 · runner-up 20 · 3rd 10 · 4th 5 · lost quarterfinal 2 · +3 for the #1 seed." },
+  ]
   return (
+    <div id="formula" className="space-y-4 scroll-mt-24">
+      {/* Always-visible summary: the table's column headers are defined here */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calculator className="h-5 w-5" />
+            How PPSI works
+          </CardTitle>
+          <CardDescription>
+            <span className="font-mono font-semibold text-foreground">PPSI = DOM + SCR + REC + RESULT</span>
+            {" "}· higher is better · {t.allTime}+ is an all-time season
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            {pillars.map((p) => (
+              <div key={p.key} className="rounded-lg border border-border/60 p-3 space-y-1">
+                <dt className="flex items-baseline justify-between gap-2">
+                  <span><span className="font-mono font-bold">{p.key}</span> <span className="text-muted-foreground">{p.name}</span></span>
+                  <span className="text-xs text-muted-foreground">{p.max}</span>
+                </dt>
+                <dd className="text-muted-foreground text-xs leading-relaxed">{p.text}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <span className="font-mono font-semibold text-foreground">LUCK†</span> is shown for context but is
+            not part of the total: positive means a tough schedule cost you wins, negative means an easy one
+            gave you some. <span className="font-mono">PF</span> / <span className="font-mono">PA</span> are points for and against.
+          </p>
+        </CardContent>
+      </Card>
+
     <Collapsible>
       <CollapsibleTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
           <span className="flex items-center gap-2">
-            <Calculator className="h-4 w-4" />
-            View PPSI Formula (v2)
+            <Info className="h-4 w-4" />
+            Full formula, rules and examples (v2)
           </span>
           <ChevronDown className="h-4 w-4" />
         </Button>
@@ -174,5 +213,6 @@ export function SDSFormula() {
         </Card>
       </CollapsibleContent>
     </Collapsible>
+    </div>
   )
 }

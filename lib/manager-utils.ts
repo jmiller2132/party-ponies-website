@@ -473,7 +473,13 @@ export async function getHeadToHeadRecord(
   // Fetch all standings in parallel to check which leagues both managers are in
   const standingsPromises = leagues.map(async (league) => {
     try {
-      const standings = await fetchLeagueStandings(league.league_key)
+      // Cache-first: without this, every uncached head-to-head hit Yahoo for
+      // every season's standings, and an expired Yahoo token made them all
+      // fail — leaving "No head-to-head records found" everywhere.
+      const season = GAME_KEY_TO_YEAR[league.league_key.split('.')[0]] || String(league.season)
+      const standings =
+        (await getCachedStandings(league.league_key, season)) ??
+        (await fetchLeagueStandings(league.league_key))
       const manager1InLeague = standings.some(s => s.owner_name === manager1)
       const manager2InLeague = standings.some(s => s.owner_name === manager2)
       return { league, standings, bothInLeague: manager1InLeague && manager2InLeague }
