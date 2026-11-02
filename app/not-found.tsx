@@ -32,7 +32,7 @@ export default function NotFound() {
         This page got cut before the playoffs.
       </p>
       <p className="text-muted-foreground text-sm max-w-xs mb-10">
-        Whatever you're looking for isn't here — but 13 seasons of history still are.
+        Whatever you're looking for isn't here — but every season since 2013 still is.
       </p>
 
       {/* Primary CTA */}

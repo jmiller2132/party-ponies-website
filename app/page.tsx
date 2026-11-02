@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button"
 
 export const metadata: Metadata = {
   title: "Party Ponies Fantasy League | History & Records",
-  description: "13+ seasons of Party Ponies fantasy football history — standings, all-time records, PPSI rankings, and rivalry tracking. Est. 2013.",
+  description: "Every Party Ponies fantasy football season since 2013 — standings, all-time records, PPSI rankings, and rivalry tracking. Est. 2013.",
   openGraph: {
     title: "Party Ponies Fantasy League",
-    description: "13+ seasons of fantasy football history. Standings, records, PPSI rankings, and rivalries.",
+    description: "Every season since 2013. Standings, records, PPSI rankings, and rivalries.",
   },
 }
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,7 +31,7 @@ export default function Home() {
           <p className="text-sm text-muted-foreground font-medium">Est. 2013</p>
 
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto font-body leading-relaxed">
-            Your complete guide to 13+ years of league history — standings, records, rivalries, and the metric that settles every argument.
+            Your complete guide to every season since 2013 — standings, records, rivalries, and the metric that settles every argument.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
@@ -105,7 +105,7 @@ export default function Home() {
             <CardContent>
               <Link href="/seasons/compare">
                 <Button variant="ghost" className="gap-2">
-                  Compare Seasons <ArrowRight className="h-4 w-4" />
+                  See PPSI rankings <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </CardContent>
@@ -177,7 +177,7 @@ export default function Home() {
             Your League, Your Legacy
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            13+ seasons preserved and compared. Synced with Yahoo Fantasy Sports and built to settle debates for good.
+            Every season since 2013, preserved and compared. Synced with Yahoo Fantasy Sports and built to settle debates for good.
           </p>
         </div>
       </section>

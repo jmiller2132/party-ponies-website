@@ -148,6 +148,15 @@ Uses NextAuth.js with a custom Yahoo OAuth provider. Tokens are stored in Supaba
 
 Yahoo uses numeric "game keys" to identify seasons (e.g. `423` = 2023 season). The canonical mapping lives in `lib/yahoo-game-keys.ts` — update it when Yahoo releases a new season.
 
+## Starting a New Season
+
+The site only shows a season once its Yahoo league is connected. Each August, when the new league exists on Yahoo:
+
+1. Find the new league key (format `{game_key}.l.{league_id}`, e.g. from the Yahoo league URL or `npm run get-owners`).
+2. In Vercel → Settings → Environment Variables, append it to the **end** of `NEXT_PUBLIC_ALLOWED_LEAGUE_KEYS` (the last key is treated as the current season). If `NEXT_PUBLIC_YAHOO_LEAGUE_KEY` is set, update it too — it overrides everything.
+3. Add the new game key → year to `GAME_KEY_TO_YEAR` in `lib/yahoo-game-keys.ts` and `lib/owner-names.ts`, and its playoff size to `PLAYOFF_SIZES_BY_SEASON` in `lib/sds-plus.ts`.
+4. Redeploy. The Standings page shows a "season isn't connected yet" notice from August on until this is done.
+
 ## Deployment to Vercel
 
 1. Push to GitHub

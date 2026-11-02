@@ -4,7 +4,7 @@ import { Trophy, BarChart3, Users, Target, Sparkles, Award } from "lucide-react"
 const links = [
   { href: "/standings", label: "Standings", icon: BarChart3 },
   { href: "/seasons", label: "Seasons", icon: Trophy },
-  { href: "/seasons/compare", label: "Compare", icon: Sparkles },
+  { href: "/seasons/compare", label: "PPSI", icon: Sparkles },
   { href: "/managers", label: "Managers", icon: Users },
   { href: "/records", label: "Records", icon: Award },
   { href: "/rivalry", label: "Rivalry", icon: Target },
@@ -31,7 +31,7 @@ export function Footer() {
               <span className="font-display font-black uppercase text-sm tracking-wide">Party Ponies</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-              13+ seasons of fantasy football history, records, and the metric that settles every argument.
+              Every season since 2013: history, records, and the metric that settles every argument.
             </p>
             <p className="text-xs text-muted-foreground">Est. 2013</p>
           </div>
@@ -57,7 +57,7 @@ export function Footer() {
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">The League</p>
             <ul className="space-y-1.5 text-sm text-muted-foreground">
-              <li>🏆 13 seasons of competition</li>
+              <li>🏆 Every season since 2013</li>
               <li>📊 Powered by Yahoo Fantasy Sports</li>
               <li>📈 PPSI — Party Ponies Season Index</li>
               <li>⚔️ Head-to-head rivalry tracking</li>

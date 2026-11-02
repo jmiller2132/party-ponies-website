@@ -80,7 +80,7 @@ export default function Image() {
 
       {/* Subtitle */}
       <p style={{ color: "#9ca3af", fontSize: 22, marginTop: 20, maxWidth: 600 }}>
-        13+ seasons of standings, records, PPSI rankings, and rivalries
+        Every season since 2013: standings, records, PPSI rankings, and rivalries
       </p>
 
       {/* Bottom rule */}

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Browse all Party Ponies fantasy football seasons from 2013 to present. See champions, standings, and PPSI scores for every year.",
   openGraph: {
     title: "Season History · Party Ponies",
-    description: "13+ seasons of Party Ponies fantasy football. Champions, records, and PPSI scores for every year.",
+    description: "Every Party Ponies fantasy football season since 2013. Champions, records, and PPSI scores for every year.",
   },
 }
 import { Badge } from "@/components/ui/badge"
@@ -85,9 +85,8 @@ function SeasonCard({ s }: { s: SeasonSummary }) {
     ? `${s.champion.wins}-${s.champion.losses}${s.champion.ties > 0 ? `-${s.champion.ties}` : ""}`
     : null
 
-  // Top scorer is different from champion
-  const topScorerDifferent =
-    s.topScorer && s.champion && s.topScorer.owner !== s.champion.owner
+  const champAlsoTopScorer =
+    !!s.topScorer && !!s.champion && s.topScorer.owner === s.champion.owner
 
   return (
     <Link href={`/seasons/${s.year}`}>
@@ -138,14 +137,17 @@ function SeasonCard({ s }: { s: SeasonSummary }) {
             </div>
           )}
 
-          {/* Top scorer (only when different from champion) */}
-          {topScorerDifferent && s.topScorer && (
+          {/* Top scorer (noted even when it's the champion) */}
+          {s.topScorer && (
             <div className="space-y-0.5">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <TrendingUp className="h-3 w-3 text-green-500" />
                 Top Scorer
               </p>
-              <p className="text-sm font-medium leading-tight">{s.topScorer.owner}</p>
+              <p className="text-sm font-medium leading-tight">
+                {s.topScorer.owner}
+                {champAlsoTopScorer && <span className="text-xs text-muted-foreground font-normal"> · also champion</span>}
+              </p>
               <p className="text-xs text-muted-foreground font-mono">{s.topScorer.points.toFixed(0)} pts</p>
             </div>
           )}

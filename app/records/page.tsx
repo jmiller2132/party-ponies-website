@@ -223,7 +223,9 @@ export default async function RecordsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {data.mostChamps.slice(0, 5).map(([owner, count], i) => (
+              {data.mostChamps
+                .filter(([, count], i, all) => i < 5 || count === all[4]?.[1])
+                .map(([owner, count], i) => (
                 <RecordRow
                   key={owner}
                   rank={i + 1}

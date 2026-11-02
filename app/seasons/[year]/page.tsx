@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
-import { getLeagueStandings, getWeekMatchups, getSDSPlusScores } from "@/app/actions/yahoo-actions"
+import { getLeagueStandings, getWeekMatchups, getSDSPlusScores, getLeagueSettings } from "@/app/actions/yahoo-actions"
+import { getCachedMatchups } from "@/lib/cache"
+import { getPlayoffTeamCount, PPSI_V2_THRESHOLDS } from "@/lib/sds-plus"
+import { withSeeds } from "@/lib/standings-utils"
 import { getLeagueKeyForYear, getAvailableYears } from "@/lib/season-utils"
 import { Suspense } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -102,8 +105,9 @@ async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: n
   const standings = result.data
     .sort((a: { rank: number }, b: { rank: number }) => a.rank - b.rank)
 
-  // Party Ponies runs a 6-team playoff regardless of league size
-  const playoffSpots = 6
+  // 2013–2017 used a 4-team playoff; 2018+ uses 6 (see PLAYOFF_SIZES_BY_SEASON)
+  const playoffSpots = getPlayoffTeamCount(String(year))
+  const seedByTeam = new Map(withSeeds(standings).map((t) => [t.team_key, t.seed]))
 
   return (
     <Card>
@@ -113,18 +117,23 @@ async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: n
           {year} Final Standings
         </CardTitle>
         <CardDescription>
-          {standings.length} teams · top {playoffSpots} made playoffs
+          {standings.length} teams · top {playoffSpots} made the playoffs · ordered by final finish
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-14 pl-6">Rank</TableHead>
+              <TableHead className="w-14 pl-6">Finish</TableHead>
               <TableHead>Manager</TableHead>
+              <TableHead className="text-right">
+                <abbr title="Regular-season seed (record, then points for)" className="no-underline">Seed</abbr>
+              </TableHead>
               <TableHead className="text-right">Record</TableHead>
               <TableHead className="text-right">Win %</TableHead>
-              <TableHead className="text-right">PPG</TableHead>
+              <TableHead className="text-right">
+                <abbr title="Points per game" className="no-underline">PPG</abbr>
+              </TableHead>
               <TableHead className="text-right pr-6">+/−</TableHead>
             </TableRow>
           </TableHeader>
@@ -158,6 +167,9 @@ async function SeasonStandings({ leagueKey, year }: { leagueKey: string; year: n
                   </TableCell>
                   <TableCell>
                     <OwnerLink owner={owner} teamName={team.name} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                    {seedByTeam.get(team.team_key) ?? "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
                     {team.wins}-{team.losses}{team.ties > 0 ? `-${team.ties}` : ""}
@@ -251,6 +263,7 @@ async function SeasonRecords({ leagueKey, year }: { leagueKey: string; year: num
 async function PPSIMetrics({ leagueKey, year }: { leagueKey: string; year: number }) {
   const result = await getSDSPlusScores(leagueKey)
   if (!result.success || !result.data?.length) return null
+  const t = PPSI_V2_THRESHOLDS
 
   return (
     <Card>
@@ -260,17 +273,20 @@ async function PPSIMetrics({ leagueKey, year }: { leagueKey: string; year: numbe
           PPSI — Party Ponies Season Index
         </CardTitle>
         <CardDescription>
-          Four-pillar metric (Dominance, Scoring, Schedule Luck, Season Result) for cross-season comparison. Click headers to sort.
+          PPSI = Dominance + Scoring + Record + Season Result, so any season can be compared with any other.
+          Luck is shown for context but not counted. Click headers to sort, or see{" "}
+          <Link href="/seasons/compare#formula" className="underline underline-offset-2 hover:text-foreground">how it&apos;s calculated</Link>.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <SDSPlusTable scores={result.data} defaultSort="score" defaultDirection="desc" />
-        <div className="mt-4 grid sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
-          <div><strong className="text-yellow-600">110+</strong> — All-time / generational</div>
-          <div><strong className="text-blue-600">95–109</strong> — Elite</div>
-          <div><strong className="text-green-600">80–94</strong> — Very good</div>
-          <div><strong className="text-foreground/70">65–79</strong> — Solid</div>
-          <div><strong className="text-red-600">&lt;65</strong> — Below average</div>
+        <div className="mt-4 grid sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+          <div><strong className="text-yellow-600">{t.allTime}+</strong> — All-time</div>
+          <div><strong className="text-blue-600">{t.elite}–{t.allTime - 1}</strong> — Elite</div>
+          <div><strong className="text-green-600">{t.veryGood}–{t.elite - 1}</strong> — Very good</div>
+          <div><strong className="text-foreground/70">{t.aboveAverage}–{t.veryGood - 1}</strong> — Above average</div>
+          <div><strong className="text-foreground/70">{t.average}–{t.aboveAverage - 1}</strong> — Average</div>
+          <div><strong className="text-red-600">&lt;{t.average}</strong> — Below average</div>
         </div>
       </CardContent>
     </Card>
@@ -280,11 +296,21 @@ async function PPSIMetrics({ leagueKey, year }: { leagueKey: string; year: numbe
 // ─── Weekly Scores ────────────────────────────────────────────────────────────
 
 async function WeeklyScoresBreakdown({ leagueKey, year }: { leagueKey: string; year: number }) {
-  const weeks = [1, 2, 3, 4, 5, 6]
+  // Every regular-season week (was hardcoded to weeks 1–6). Yahoo settings give
+  // the true length; 2018–2020 had 13-week regular seasons, others 14.
+  const settings = await getLeagueSettings(leagueKey)
+  const regularWeeks =
+    (settings.success && settings.data?.num_regular_season_weeks) ||
+    (year >= 2018 && year <= 2020 ? 13 : 14)
+  const weeks = Array.from({ length: regularWeeks }, (_, i) => i + 1)
 
-  // Fetch all weeks in parallel
+  // Cache-first so archived seasons don't depend on a live Yahoo token
   const results = await Promise.all(
-    weeks.map(w => getWeekMatchups(leagueKey, w).then(r => ({ week: w, r })))
+    weeks.map(async (w) => {
+      const cached = await getCachedMatchups(leagueKey, String(year), w).catch(() => null)
+      if (cached && cached.length > 0) return { week: w, r: { success: true, data: cached } }
+      return getWeekMatchups(leagueKey, w).then(r => ({ week: w, r }))
+    })
   )
 
   const weeklyData = results
@@ -300,10 +326,10 @@ async function WeeklyScoresBreakdown({ leagueKey, year }: { leagueKey: string; y
           <BarChart3 className="h-5 w-5" />
           Weekly Scores
         </CardTitle>
-        <CardDescription>Per-week scoring summary for the {year} season</CardDescription>
+        <CardDescription>Regular-season scoring by week, {year}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           {weeklyData.map(({ week, matchups }) => {
             const allScores: number[] = matchups.flatMap((m: { team1: { points: number }; team2: { points: number } }) => [m.team1.points, m.team2.points])
             const high = Math.max(...allScores)
